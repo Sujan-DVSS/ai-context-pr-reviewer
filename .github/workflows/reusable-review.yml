@@ -7,6 +7,10 @@ on:
         description: Directory in the caller repository containing story JSON files.
         type: string
         default: stories
+      story-provider:
+        description: auto, json, or jira. auto uses Jira when configured and falls back to JSON.
+        type: string
+        default: auto
       fail-on:
         description: Severity threshold that fails the workflow. Use none, low, medium, high, or critical.
         type: string
@@ -35,12 +39,30 @@ on:
         description: LiteLLM model name.
         type: string
         default: us.anthropic.claude-opus-4-7
+      jira-base-url:
+        description: Jira base URL. Required for Jira provider.
+        type: string
+        default: ""
+      jira-ac-field:
+        description: Optional Jira custom field ID containing acceptance criteria, e.g. customfield_12345.
+        type: string
+        default: ""
+      jira-api-version:
+        description: Jira REST API version.
+        type: string
+        default: "3"
       reviewer-ref:
         description: Ref of the central reviewer repository to run.
         type: string
         default: main
     secrets:
       LITELLM_API_KEY:
+        required: false
+      JIRA_EMAIL:
+        required: false
+      JIRA_API_TOKEN:
+        required: false
+      JIRA_BEARER_TOKEN:
         required: false
 
 permissions:
@@ -81,6 +103,12 @@ jobs:
           GITHUB_HEAD_REF: ${{ github.head_ref }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
+          JIRA_BASE_URL: ${{ inputs.jira-base-url }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_BEARER_TOKEN: ${{ secrets.JIRA_BEARER_TOKEN }}
+          JIRA_AC_FIELD: ${{ inputs.jira-ac-field }}
+          JIRA_API_VERSION: ${{ inputs.jira-api-version }}
           LITELLM_BASE_URL: ${{ inputs.litellm-base-url }}
           LITELLM_API_PATH: ${{ inputs.litellm-api-path }}
           LITELLM_API_KEY: ${{ secrets.LITELLM_API_KEY }}
@@ -94,6 +122,7 @@ jobs:
 
           node .ai-context-pr-reviewer/src/index.js \
             --diff pr.diff \
+            --story-provider "${{ inputs.story-provider }}" \
             --stories-dir "${{ inputs.stories-dir }}" \
             --repo-root . \
             --max-context-files "${{ inputs.max-context-files }}" \

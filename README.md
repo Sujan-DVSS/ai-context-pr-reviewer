@@ -2,7 +2,7 @@
 
 Hackathon MVP for an AI context-aware code peer review bot. It runs when a pull request is opened or updated, reads the PR diff, scans the repository for story-relevant implementation context, reads the related user story from JSON, and produces a review that connects implementation evidence back to the story description and acceptance criteria.
 
-The MVP is intentionally dependency-light and can run without API keys. JSON is the story provider today; Jira, Linear, GitHub Issues, or Confluence can be added later by implementing the same story contract. If a LiteLLM gateway is configured, the reviewer also runs an LLM semantic pass.
+The MVP is intentionally dependency-light and can run without API keys. JSON is the fallback story provider today; Jira REST can pull live issue details when configured. If a LiteLLM gateway is configured, the reviewer also runs an LLM semantic pass.
 
 ## What It Reviews
 
@@ -50,6 +50,37 @@ Disable repository scanning if you only want a diff-level review:
 ```bash
 node src/index.js --story stories/sample-story.json --diff pr.diff --no-repo-context
 ```
+
+## Jira Integration
+
+For GitHub Actions, Jira is integrated through REST so the workflow can run independently of Cursor. The reviewer extracts a ticket ID such as `STRY-123` from the branch name, PR title, PR body, or commit messages, then fetches that Jira issue and converts it into the same internal story contract used by JSON.
+
+```bash
+export JIRA_BASE_URL="https://your-company.atlassian.net"
+export JIRA_EMAIL="you@company.com"
+export JIRA_API_TOKEN="..."
+
+node src/index.js \
+  --story-provider jira \
+  --ticket-id STRY-123 \
+  --diff pr.diff \
+  --repo-root .
+```
+
+For bearer-token setups:
+
+```bash
+export JIRA_BASE_URL="https://jira.your-company.com"
+export JIRA_BEARER_TOKEN="..."
+```
+
+If acceptance criteria live in a Jira custom field, set:
+
+```bash
+export JIRA_AC_FIELD="customfield_12345"
+```
+
+`--story-provider auto` uses Jira when Jira credentials are present and falls back to JSON otherwise. Jira MCP can still be used inside Cursor for manual lookup or validation, but GitHub Actions should use the REST provider because MCP servers are not available in the GitHub runner by default.
 
 ## LiteLLM Integration
 
@@ -126,9 +157,15 @@ jobs:
     uses: Sujan-DVSS/ai-context-pr-reviewer/.github/workflows/reusable-review.yml@main
     secrets:
       LITELLM_API_KEY: ${{ secrets.LITELLM_API_KEY }}
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      JIRA_BEARER_TOKEN: ${{ secrets.JIRA_BEARER_TOKEN }}
+    with:
+      story-provider: auto
+      jira-base-url: https://your-company.atlassian.net
 ```
 
-For the hackathon, keep a story file in `stories/<ticket-id>.json` and include the ticket ID in the branch name, PR title, PR body, or commit messages. If there is no exact match, the sample story is used as a fallback so the workflow still demonstrates end-to-end behavior.
+For the hackathon, you can either configure Jira or keep a story file in `stories/<ticket-id>.json` and include the ticket ID in the branch name, PR title, PR body, or commit messages. If Jira is not configured and there is no exact JSON match, the sample story is used as a fallback so the workflow still demonstrates end-to-end behavior.
 
 Examples that resolve to `stories/STRY-123.json`:
 
@@ -149,6 +186,13 @@ The workflow already defaults to the CodeFest LiteLLM gateway and `us.anthropic.
 - Variable `LITELLM_MODEL` to override the model
 
 The workflow uses `--llm-provider auto`, so app repos can share the same workflow safely. Repos without LiteLLM secrets still get deterministic + repo-context review, while repos with LiteLLM configured get the semantic AI analysis automatically.
+
+To enable Jira in GitHub Actions, add either:
+
+- Secrets `JIRA_EMAIL` and `JIRA_API_TOKEN`
+- Or secret `JIRA_BEARER_TOKEN`
+
+And set workflow input `jira-base-url`. Optionally set `jira-ac-field` if ACs are stored in a custom Jira field.
 
 ## Future Integrations
 

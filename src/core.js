@@ -244,8 +244,7 @@ export function resolveStoryPath({ explicitStoryPath, storiesDir = "stories", re
     return explicitStoryPath;
   }
 
-  const haystack = refs.filter(Boolean).join(" ");
-  const ticketIds = [...new Set((haystack.match(/[A-Z][A-Z0-9]+-\d+/gi) ?? []).map((ticketId) => ticketId.toUpperCase()))];
+  const ticketIds = extractTicketIds(refs);
   for (const ticketId of ticketIds) {
     const candidates = [
       join(storiesDir, `${ticketId}.json`),
@@ -270,6 +269,11 @@ export function resolveStoryPath({ explicitStoryPath, storiesDir = "stories", re
   }
 
   throw new Error("No story JSON found. Pass --story or add stories/sample-story.json.");
+}
+
+export function extractTicketIds(refs = []) {
+  const haystack = refs.filter(Boolean).join(" ");
+  return [...new Set((haystack.match(/[A-Z][A-Z0-9]+-\d+/gi) ?? []).map((ticketId) => ticketId.toUpperCase()))];
 }
 
 export function buildRepoContext(story, {

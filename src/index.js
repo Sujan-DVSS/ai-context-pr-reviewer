@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import {
   buildRepoContext,
+  extractTicketIds,
   loadStory,
   markLlmFailure,
   mergeLlmReview,
@@ -12,6 +13,7 @@ import {
   shouldFail,
   writeReports
 } from "./core.js";
+import { hasJiraConfig, loadJiraStory } from "./jira.js";
 import { runLiteLlmSemanticReview, shouldRunLlm } from "./llm.js";
 
 async function main() {
@@ -29,12 +31,8 @@ async function main() {
     process.env.PR_BODY,
     process.env.PR_COMMITS
   ];
-  const storyPath = resolveStoryPath({
-    explicitStoryPath: args.story,
-    storiesDir: args["stories-dir"] ?? "stories",
-    refs
-  });
-  const story = loadStory(storyPath);
+  const storyContext = await loadStoryContext(args, refs);
+  const story = storyContext.story;
   const diffText = readDiff(args);
   const repoContext = args["no-repo-context"]
     ? undefined
@@ -48,7 +46,9 @@ async function main() {
     diffText,
     repoContext,
     metadata: {
-      storyPath,
+      storyPath: storyContext.storyPath,
+      storyProvider: storyContext.provider,
+      ticketId: storyContext.ticketId,
       repoRoot: repoContext?.rootDir,
       source: args.diff ? "diff-file" : "git"
     }
@@ -92,6 +92,46 @@ async function main() {
     console.error("Failing because --llm-required was set and LiteLLM semantic review failed.");
     process.exitCode = 1;
   }
+}
+
+async function loadStoryContext(args, refs) {
+  const provider = args["story-provider"] ?? process.env.STORY_PROVIDER ?? "auto";
+  const ticketId = args["ticket-id"] ?? extractTicketIds(refs)[0];
+  const storiesDir = args["stories-dir"] ?? "stories";
+
+  if (provider === "jira" || (provider === "auto" && hasJiraConfig(args))) {
+    if (!ticketId) {
+      if (provider === "jira") {
+        throw new Error("No ticket ID found for Jira lookup. Include STRY-123-style ID in branch, title, body, commit, or pass --ticket-id.");
+      }
+    } else {
+      try {
+        const story = await loadJiraStory(ticketId, { args });
+        return {
+          story,
+          provider: "jira",
+          ticketId
+        };
+      } catch (error) {
+        if (provider === "jira") {
+          throw error;
+        }
+        console.warn(`Jira story lookup failed, falling back to JSON: ${error instanceof Error ? error.message : error}`);
+      }
+    }
+  }
+
+  const storyPath = resolveStoryPath({
+    explicitStoryPath: args.story,
+    storiesDir,
+    refs
+  });
+  return {
+    story: loadStory(storyPath),
+    storyPath,
+    provider: "json",
+    ticketId: ticketId ?? undefined
+  };
 }
 
 function readDiff(args) {
@@ -139,7 +179,15 @@ Usage:
 
 Options:
   --story <path>        Story JSON file. If omitted, tries ticket IDs from PR metadata.
+  --story-provider      auto, json, or jira. Default: auto.
+  --ticket-id           Explicit story/ticket ID, e.g. STRY-123.
   --stories-dir <dir>   Directory containing story JSON files. Default: stories.
+  --jira-base-url       Jira base URL. Can also use JIRA_BASE_URL.
+  --jira-email          Jira email for basic auth. Can also use JIRA_EMAIL.
+  --jira-api-token      Jira API token for basic auth. Can also use JIRA_API_TOKEN.
+  --jira-bearer-token   Jira bearer token. Can also use JIRA_BEARER_TOKEN.
+  --jira-ac-field       Optional Jira custom field ID for acceptance criteria, e.g. customfield_12345.
+  --jira-api-version    Jira REST API version. Default: 3.
   --diff <path>         Unified diff file. If omitted, runs git diff.
   --range <git-range>   Git diff range when --diff is omitted. Default: origin/main...HEAD.
   --repo-root <path>    Repository root to scan for story-relevant context. Default: current directory.

@@ -2,9 +2,11 @@
 
 Use this when you want another repository to run the central AI Context PR Reviewer without copying the engine.
 
-## 1. Add Story JSON
+## 1. Connect Story Context
 
-Create a story file in the application repository:
+Option A: use Jira. The reusable workflow can pull the story directly from Jira when a PR references a ticket ID.
+
+Option B: use JSON. Create a story file in the application repository:
 
 ```text
 stories/STRY-123.json
@@ -39,13 +41,43 @@ jobs:
     uses: Sujan-DVSS/ai-context-pr-reviewer/.github/workflows/reusable-review.yml@main
     secrets:
       LITELLM_API_KEY: ${{ secrets.LITELLM_API_KEY }}
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
     with:
+      story-provider: auto
       stories-dir: stories
+      jira-base-url: https://your-company.atlassian.net
       fail-on: high
       llm-provider: auto
 ```
 
-## 3. Configure LiteLLM
+## 3. Configure Jira
+
+For Jira Cloud basic auth, add these repository or organization secrets:
+
+```text
+JIRA_EMAIL
+JIRA_API_TOKEN
+```
+
+For bearer-token setups, add:
+
+```text
+JIRA_BEARER_TOKEN
+```
+
+If acceptance criteria are stored in a custom Jira field, pass:
+
+```yaml
+with:
+  jira-ac-field: customfield_12345
+```
+
+When `story-provider: auto`, Jira is used if credentials are present. Otherwise, the workflow falls back to `stories/<ticket-id>.json`.
+
+Jira MCP can be used inside Cursor for manual issue lookup, but GitHub Actions uses Jira REST because the MCP server is not present on GitHub-hosted runners by default.
+
+## 4. Configure LiteLLM
 
 Add this repository or organization secret:
 
@@ -70,12 +102,12 @@ with:
   litellm-model: us.anthropic.claude-opus-4-7
 ```
 
-## 4. Test
+## 5. Test
 
 Open a PR whose branch, title, body, or commit message contains the story ID. The workflow will:
 
 - Generate the PR diff.
-- Load `stories/<ticket-id>.json`.
+- Load Jira issue details when Jira is configured, otherwise load `stories/<ticket-id>.json`.
 - Scan the repository for relevant context.
 - Run static, security, performance, and traceability checks.
 - Run LiteLLM semantic analysis when the key is configured.

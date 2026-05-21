@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import {
   buildRepoContext,
+  extractTicketIds,
   markLlmFailure,
   mergeLlmReview,
   parseUnifiedDiff,
@@ -13,6 +14,7 @@ import {
   runReview,
   shouldFail
 } from "../src/core.js";
+import { jiraIssueToStory, loadJiraStory } from "../src/jira.js";
 import { runLiteLlmSemanticReview, shouldRunLlm } from "../src/llm.js";
 
 const sampleDiff = readFileSync(new URL("./fixtures/sample.diff", import.meta.url), "utf8");
@@ -71,6 +73,91 @@ test("resolveStoryPath extracts ticket IDs from commit-style refs case-insensiti
   });
 
   assert.equal(storyPath, join(storiesDir, "STRY-123.json"));
+});
+
+test("extractTicketIds returns unique uppercase Jira-style IDs", () => {
+  assert.deepEqual(
+    extractTicketIds(["branch stry-123", "title STRY-123 and PAY-9"]),
+    ["STRY-123", "PAY-9"]
+  );
+});
+
+test("jiraIssueToStory converts Jira fields into the internal story contract", () => {
+  const story = jiraIssueToStory({
+    key: "STRY-123",
+    fields: {
+      summary: "Cap loyalty discount",
+      description: {
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "Guests need capped loyalty discounts." }]
+          },
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "Acceptance Criteria:" }]
+          },
+          {
+            type: "bulletList",
+            content: [
+              {
+                type: "listItem",
+                content: [{ type: "paragraph", content: [{ type: "text", text: "Discounts must not exceed 30 percent." }] }]
+              },
+              {
+                type: "listItem",
+                content: [{ type: "paragraph", content: [{ type: "text", text: "Quote includes cap reason." }] }]
+              }
+            ]
+          }
+        ]
+      },
+      labels: ["pricing"],
+      components: [{ name: "booking" }],
+      issuetype: { name: "Story" },
+      status: { name: "In Progress" },
+      priority: { name: "High" }
+    }
+  }, { baseUrl: "https://jira.example.com" });
+
+  assert.equal(story.id, "STRY-123");
+  assert.equal(story.title, "Cap loyalty discount");
+  assert.equal(story.source.provider, "jira");
+  assert.equal(story.acceptanceCriteria.length, 2);
+  assert.match(story.acceptanceCriteria[0].text, /30 percent/);
+});
+
+test("loadJiraStory calls Jira REST with bearer auth", async () => {
+  let requestedUrl = "";
+  let authorization = "";
+  const story = await loadJiraStory("STRY-123", {
+    args: {
+      "jira-base-url": "https://jira.example.com",
+      "jira-bearer-token": "token",
+      "jira-ac-field": "customfield_10010"
+    },
+    fetchImpl: async (url, options) => {
+      requestedUrl = url;
+      authorization = options.headers.authorization;
+      return {
+        ok: true,
+        json: async () => ({
+          key: "STRY-123",
+          fields: {
+            summary: "Demo story",
+            description: "Acceptance Criteria:\n- Do the thing",
+            customfield_10010: "- Custom AC"
+          }
+        })
+      };
+    }
+  });
+
+  assert.match(requestedUrl, /STRY-123/);
+  assert.match(requestedUrl, /customfield_10010/);
+  assert.equal(authorization, "Bearer token");
+  assert.equal(story.acceptanceCriteria[0].text, "Custom AC");
 });
 
 test("shouldFail respects configured threshold", () => {

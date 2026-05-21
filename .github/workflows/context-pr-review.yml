@@ -35,6 +35,12 @@ jobs:
           GITHUB_HEAD_REF: ${{ github.head_ref }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
+          JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_BEARER_TOKEN: ${{ secrets.JIRA_BEARER_TOKEN }}
+          JIRA_AC_FIELD: ${{ vars.JIRA_AC_FIELD }}
+          JIRA_API_VERSION: ${{ vars.JIRA_API_VERSION || '3' }}
           LITELLM_API_KEY: ${{ secrets.LITELLM_API_KEY }}
           LITELLM_BASE_URL: ${{ secrets.LITELLM_BASE_URL || 'https://llmgw.codefest2026.marriott.com/' }}
           LITELLM_API_PATH: ${{ vars.LITELLM_API_PATH || '/chat/completions' }}
@@ -43,6 +49,7 @@ jobs:
           export PR_COMMITS="$(git log --format=%B "origin/${{ github.base_ref }}...HEAD")"
           node src/index.js \
             --diff pr.diff \
+            --story-provider auto \
             --stories-dir stories \
             --repo-root . \
             --max-context-files 700 \
