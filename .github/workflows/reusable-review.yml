@@ -245,7 +245,7 @@ jobs:
                 path: finding.file,
                 line,
                 side: "RIGHT",
-                body: buildInlineBody(finding)
+                body: buildInlineBody(finding, comments.length + 1, line)
               });
               if (comments.length >= 20) {
                 break;
@@ -279,21 +279,106 @@ jobs:
               return /^(\/\/|\/\*|\*|#|<!--|--|;)/.test(text);
             }
 
-            function buildInlineBody(finding) {
+            function buildInlineBody(finding, sequence, reviewLine) {
               const severity = String(finding.severity ?? "low").toLowerCase();
-              const blocking = ["critical", "high", "medium"].includes(severity);
               const title = plainTitle(finding);
-              const details = plainDetails(finding);
+              const observation = sentence(finding.details) || plainDetails(finding);
+              const actual = plainDetails(finding);
               const recommendation = plainRecommendation(finding);
+              const storyRef = report.metadata?.storyId ?? "Unknown story";
+              const reviewedAt = report.metadata?.generatedAt ?? new Date().toISOString();
+              const reviewId = `CR-${sanitizeReviewId(storyRef)}-${String(sequence).padStart(3, "0")}`;
+              const acReference = acceptanceReference(finding, storyRef);
               return [
-                `**ReviewIQ: ${blocking ? "Needs fix before merge" : "Suggestion"} (${severity.toUpperCase()})**`,
+                `**Review ID:** ${reviewId}`,
+                `**Severity:** ${severityLabel(severity)}`,
+                `**Category:** ${categoryLabel(finding.category)}`,
+                `**Story:** ${storyRef}`,
                 "",
-                title,
+                `**File:** ${finding.file}`,
+                `**Line(s):** ${lineRange(finding, reviewLine)}`,
+                `**Method / Function:** ${methodName(finding)}`,
                 "",
-                details ? `Why this matters: ${details}` : "",
-                recommendation ? `What to change: ${recommendation}` : "",
-                blocking ? "" : "This is optional and should not block the merge."
+                `**Title:** ${title}`,
+                "",
+                "**Observation:**",
+                observation,
+                "",
+                "**Expected behaviour:**",
+                expectedBehaviour(finding),
+                "",
+                "**Actual behaviour:**",
+                actual,
+                "",
+                "**Suggested fix:**",
+                recommendation,
+                "",
+                `**Acceptance Criteria reference:** ${acReference}`,
+                "",
+                "**Author:** AI Review Assistant",
+                `**Reviewed at:** ${reviewedAt}`,
+                "**Status:** Open"
               ].filter(Boolean).join("\n");
+            }
+
+            function sanitizeReviewId(value) {
+              return String(value ?? "UNKNOWN").replace(/[^A-Za-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "UNKNOWN";
+            }
+
+            function severityLabel(severity) {
+              const labels = {
+                critical: "Critical",
+                high: "High",
+                medium: "Medium",
+                low: "Low"
+              };
+              return labels[severity] ?? "Suggestion";
+            }
+
+            function categoryLabel(category) {
+              const labels = {
+                security: "Security",
+                performance: "Performance",
+                static: "Maintainability",
+                traceability: "Logic",
+                tests: "Logic"
+              };
+              return labels[String(category ?? "").toLowerCase()] ?? "Bug";
+            }
+
+            function lineRange(finding, reviewLine) {
+              const start = Number.isInteger(finding.line) ? finding.line : reviewLine;
+              const end = Number.isInteger(finding.endLine) && finding.endLine > start ? finding.endLine : start;
+              return start === end ? String(start) : `${start}-${end}`;
+            }
+
+            function methodName(finding) {
+              return finding.method ?? finding.functionName ?? "Not detected from diff";
+            }
+
+            function expectedBehaviour(finding) {
+              if (finding.category === "security") {
+                return "The change should not expose secrets, unsafe input, or sensitive customer data.";
+              }
+              if (finding.category === "performance") {
+                return "The change should avoid unnecessary slowdowns in user-facing or frequently used code paths.";
+              }
+              if (finding.category === "static") {
+                return "The code should be easy to maintain and should not hide errors or debug-only behavior.";
+              }
+              if (finding.category === "tests") {
+                return "The story should include the test evidence it explicitly asks for.";
+              }
+              return "The implementation should match the linked story and acceptance criteria.";
+            }
+
+            function acceptanceReference(finding, storyRef) {
+              const text = [finding.title, finding.details, finding.recommendation].filter(Boolean).join(" ");
+              const match = text.match(/\bAC\s*#?\s*(\d+)\b|\b(AC\d+)\b/i);
+              if (match) {
+                return `${storyRef} — ${match[2] ?? `AC #${match[1]}`}`;
+              }
+              return `${storyRef} — ReviewIQ rule ${finding.id ?? "N/A"}`;
             }
 
             function plainTitle(finding) {
