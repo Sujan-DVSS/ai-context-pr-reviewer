@@ -35,7 +35,8 @@ export async function runLiteLlmSemanticReview({ story, diffText, repoContext, d
             "You are a senior code reviewer.",
             "Review only the provided PR diff, story, deterministic findings, and retrieved repository context.",
             "Return strict JSON only. Do not wrap it in markdown.",
-            "Prefer high-signal findings. Avoid duplicating deterministic findings unless you add semantic requirement context."
+            "Prefer high-signal findings. Avoid duplicating deterministic findings unless you add semantic requirement context.",
+            "Do not require tests unless the story, acceptance criteria, or explicit test expectations mention tests or coverage."
           ].join(" ")
         },
         {

@@ -49,6 +49,7 @@ const DEFAULT_IGNORE_DIRS = new Set([
   ".next",
   ".turbo",
   ".cache",
+  ".ai-context-pr-reviewer",
   "target",
   "bin",
   "obj"

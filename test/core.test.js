@@ -61,6 +61,19 @@ test("buildRepoContext scores repository files against story terms", () => {
   assert.ok(repoContext.relevantFiles.some((file) => file.matchedTerms.includes("payment")));
 });
 
+test("buildRepoContext ignores the checked-out reviewer engine folder", () => {
+  const root = mkdtempSync(join(tmpdir(), "context-reviewer-repo-"));
+  mkdirSync(join(root, ".ai-context-pr-reviewer", "src"), { recursive: true });
+  mkdirSync(join(root, "src", "services"), { recursive: true });
+  writeFileSync(join(root, ".ai-context-pr-reviewer", "src", "core.js"), "payment payment payment idempotency");
+  writeFileSync(join(root, "src", "services", "PaymentService.ts"), "payment idempotency");
+
+  const repoContext = buildRepoContext(sampleStory, { rootDir: root });
+
+  assert.equal(repoContext.relevantFiles.some((file) => file.path.startsWith(".ai-context-pr-reviewer/")), false);
+  assert.ok(repoContext.relevantFiles.some((file) => file.path === "src/services/PaymentService.ts"));
+});
+
 test("resolveStoryPath extracts ticket IDs from commit-style refs case-insensitively", () => {
   const root = mkdtempSync(join(tmpdir(), "context-reviewer-"));
   const storiesDir = join(root, "stories");
