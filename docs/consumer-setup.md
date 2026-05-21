@@ -57,6 +57,7 @@ The reusable workflow defaults to:
 
 ```text
 LITELLM_BASE_URL=https://llmgw.codefest2026.marriott.com/
+LITELLM_API_PATH=/chat/completions
 LITELLM_MODEL=us.anthropic.claude-opus-4-7
 ```
 
@@ -65,6 +66,7 @@ Override them if needed:
 ```yaml
 with:
   litellm-base-url: https://llmgw.codefest2026.marriott.com/
+  litellm-api-path: /chat/completions
   litellm-model: us.anthropic.claude-opus-4-7
 ```
 
@@ -78,3 +80,4 @@ Open a PR whose branch, title, body, or commit message contains the story ID. Th
 - Run static, security, performance, and traceability checks.
 - Run LiteLLM semantic analysis when the key is configured.
 - Post or update a PR comment.
+- Post inline review comments for findings that map to changed PR lines.

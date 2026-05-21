@@ -13,7 +13,7 @@ import {
   runReview,
   shouldFail
 } from "../src/core.js";
-import { shouldRunLlm } from "../src/llm.js";
+import { runLiteLlmSemanticReview, shouldRunLlm } from "../src/llm.js";
 
 const sampleDiff = readFileSync(new URL("./fixtures/sample.diff", import.meta.url), "utf8");
 const sampleStory = JSON.parse(readFileSync(new URL("../stories/sample-story.json", import.meta.url), "utf8"));
@@ -129,4 +129,49 @@ test("shouldRunLlm supports auto mode only when LiteLLM config is present", () =
       LITELLM_API_KEY: "test"
     }
   ), true);
+});
+
+test("runLiteLlmSemanticReview accepts array-shaped Anthropic content", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      choices: [
+        {
+          message: {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  summary: "Looks aligned with one missing test.",
+                  riskLevel: "medium",
+                  acceptanceCriteria: [],
+                  findings: [],
+                  suggestedTests: ["Add discount cap test"],
+                  reviewerQuestions: []
+                })
+              }
+            ]
+          }
+        }
+      ]
+    })
+  });
+
+  try {
+    const deterministicReport = runReview({ story: sampleStory, diffText: sampleDiff });
+    const review = await runLiteLlmSemanticReview({
+      story: sampleStory,
+      diffText: sampleDiff,
+      deterministicReport,
+      args: {
+        "llm-api-key": "test"
+      }
+    });
+
+    assert.equal(review.summary, "Looks aligned with one missing test.");
+    assert.deepEqual(review.suggestedTests, ["Add discount cap test"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

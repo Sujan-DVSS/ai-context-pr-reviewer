@@ -147,6 +147,7 @@ Options:
   --no-repo-context     Disable full-repository context indexing.
   --llm-provider        none, auto, or litellm. Default: none.
   --llm-base-url        LiteLLM gateway base URL. Can also use LITELLM_BASE_URL.
+  --llm-api-path        LiteLLM chat completion path. Default: /chat/completions.
   --llm-model           LiteLLM model name. Can also use LITELLM_MODEL.
   --llm-api-key         LiteLLM API key. Prefer LITELLM_API_KEY in CI.
   --llm-timeout-ms      LiteLLM request timeout. Default: 45000.

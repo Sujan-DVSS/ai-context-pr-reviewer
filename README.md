@@ -68,9 +68,10 @@ node src/index.js \
 This MVP defaults to:
 
 - `LITELLM_BASE_URL=https://llmgw.codefest2026.marriott.com/`
+- `LITELLM_API_PATH=/chat/completions`
 - `LITELLM_MODEL=us.anthropic.claude-opus-4-7`
 
-You only need to provide `LITELLM_API_KEY`. Override the gateway or model with `--llm-base-url`, `--llm-model`, `LITELLM_BASE_URL`, or `LITELLM_MODEL` if needed.
+You only need to provide `LITELLM_API_KEY`. Override the gateway, API path, or model with `--llm-base-url`, `--llm-api-path`, `--llm-model`, `LITELLM_BASE_URL`, `LITELLM_API_PATH`, or `LITELLM_MODEL` if needed.
 
 Use `--llm-provider auto` in CI to run the LLM only when `LITELLM_BASE_URL`, `LITELLM_API_KEY`, and `LITELLM_MODEL` are present. Without those values, the reviewer falls back to deterministic + repo-context review.
 
@@ -144,6 +145,7 @@ To enable LiteLLM in GitHub Actions, add:
 The workflow already defaults to the CodeFest LiteLLM gateway and `us.anthropic.claude-opus-4-7`. Optionally add:
 
 - Secret `LITELLM_BASE_URL` to override the gateway
+- Variable `LITELLM_API_PATH` to override the chat completion path
 - Variable `LITELLM_MODEL` to override the model
 
 The workflow uses `--llm-provider auto`, so app repos can share the same workflow safely. Repos without LiteLLM secrets still get deterministic + repo-context review, while repos with LiteLLM configured get the semantic AI analysis automatically.

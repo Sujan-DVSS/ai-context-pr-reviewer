@@ -19,7 +19,7 @@ export async function runLiteLlmSemanticReview({ story, diffText, repoContext, d
   const config = resolveLiteLlmConfig(args, env, { requireAll: true });
   const payload = buildReviewPayload({ story, diffText, repoContext, deterministicReport });
 
-  const response = await fetch(`${config.baseUrl}/chat/completions`, {
+  const response = await fetch(buildLiteLlmUrl(config), {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -27,7 +27,7 @@ export async function runLiteLlmSemanticReview({ story, diffText, repoContext, d
     },
     body: JSON.stringify({
       model: config.model,
-      temperature: Number(args["llm-temperature"] ?? env.LLM_TEMPERATURE ?? 0.1),
+      ...optionalTemperature(args, env),
       messages: [
         {
           role: "system",
@@ -53,9 +53,9 @@ export async function runLiteLlmSemanticReview({ story, diffText, repoContext, d
   }
 
   const data = await response.json();
-  const content = data.choices?.[0]?.message?.content;
+  const content = extractResponseContent(data);
   if (!content) {
-    throw new Error("LiteLLM response did not include message content.");
+    throw new Error(`LiteLLM response did not include parseable text content. Response keys: ${Object.keys(data).join(", ")}`);
   }
 
   return normalizeLlmReview(parseJsonObject(content), {
@@ -69,6 +69,7 @@ function resolveLiteLlmConfig(args, env, { requireAll }) {
   const baseUrl = normalizeBaseUrl(firstPresent(args["llm-base-url"], env.LITELLM_BASE_URL, env.OPENAI_BASE_URL, DEFAULT_LITELLM_BASE_URL));
   const apiKey = firstPresent(args["llm-api-key"], env.LITELLM_API_KEY, env.OPENAI_API_KEY);
   const model = firstPresent(args["llm-model"], env.LITELLM_MODEL, env.OPENAI_MODEL, DEFAULT_LITELLM_MODEL);
+  const apiPath = firstPresent(args["llm-api-path"], env.LITELLM_API_PATH, "/chat/completions");
 
   if (!baseUrl || !apiKey || !model) {
     if (!requireAll) {
@@ -77,7 +78,7 @@ function resolveLiteLlmConfig(args, env, { requireAll }) {
     throw new Error("LiteLLM requires --llm-base-url, --llm-model, and LITELLM_API_KEY or --llm-api-key.");
   }
 
-  return { baseUrl, apiKey, model };
+  return { baseUrl, apiKey, model, apiPath };
 }
 
 function buildReviewPayload({ story, diffText, repoContext, deterministicReport }) {
@@ -180,16 +181,81 @@ function parseJsonObject(content) {
   }
 }
 
+function extractResponseContent(data) {
+  const choice = data.choices?.[0];
+  const candidates = [
+    choice?.message?.content,
+    choice?.message?.reasoning_content,
+    choice?.text,
+    data.output_text,
+    data.message?.content,
+    data.content
+  ];
+
+  for (const candidate of candidates) {
+    const text = normalizeContent(candidate);
+    if (text) {
+      return text;
+    }
+  }
+
+  return undefined;
+}
+
+function normalizeContent(content) {
+  if (typeof content === "string") {
+    return content.trim();
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === "string") {
+          return part;
+        }
+        if (typeof part?.text === "string") {
+          return part.text;
+        }
+        if (typeof part?.content === "string") {
+          return part.content;
+        }
+        return "";
+      })
+      .join("\n")
+      .trim();
+  }
+
+  if (content && typeof content === "object") {
+    if (typeof content.text === "string") {
+      return content.text.trim();
+    }
+    if (typeof content.content === "string") {
+      return content.content.trim();
+    }
+  }
+
+  return undefined;
+}
+
 function normalizeBaseUrl(value) {
   if (!value) {
     return undefined;
   }
-  const trimmed = value.replace(/\/+$/, "");
-  return trimmed.endsWith("/v1") ? trimmed : `${trimmed}/v1`;
+  return value.replace(/\/+$/, "");
+}
+
+function buildLiteLlmUrl(config) {
+  const path = config.apiPath.startsWith("/") ? config.apiPath : `/${config.apiPath}`;
+  return `${config.baseUrl}${path}`;
 }
 
 function firstPresent(...values) {
   return values.find((value) => typeof value === "string" && value.trim().length > 0);
+}
+
+function optionalTemperature(args, env) {
+  const value = firstPresent(args["llm-temperature"], env.LLM_TEMPERATURE);
+  return value ? { temperature: Number(value) } : {};
 }
 
 function normalizeSeverity(value) {
