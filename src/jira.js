@@ -61,9 +61,7 @@ export function jiraIssueToStory(issue, config = {}) {
     technicalConstraints: inferConstraints(description),
     securityExpectations: inferSecurityExpectations(description, labels, components),
     performanceExpectations: inferPerformanceExpectations(description),
-    testExpectations: acceptanceCriteria.length > 0
-      ? ["Add or update tests that prove the Jira acceptance criteria."]
-      : [],
+    testExpectations: inferTestExpectations(description, acText),
     outOfScope: inferOutOfScope(description),
     source: {
       provider: "jira",
@@ -197,6 +195,10 @@ function inferSecurityExpectations(description, labels, components) {
 
 function inferPerformanceExpectations(description) {
   return extractSentences(description, /performance|latency|fast|slow|cache|query|external service/i);
+}
+
+function inferTestExpectations(description, acceptanceCriteriaText) {
+  return extractSentences(`${description}\n${acceptanceCriteriaText}`, /test|unit test|integration test|automated test|coverage/i);
 }
 
 function inferOutOfScope(description) {

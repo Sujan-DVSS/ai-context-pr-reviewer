@@ -126,6 +126,7 @@ test("jiraIssueToStory converts Jira fields into the internal story contract", (
   assert.equal(story.source.provider, "jira");
   assert.equal(story.acceptanceCriteria.length, 2);
   assert.match(story.acceptanceCriteria[0].text, /30 percent/);
+  assert.deepEqual(story.testExpectations, []);
 });
 
 test("loadJiraStory calls Jira REST with bearer auth", async () => {
@@ -158,6 +159,21 @@ test("loadJiraStory calls Jira REST with bearer auth", async () => {
   assert.match(requestedUrl, /customfield_10010/);
   assert.equal(authorization, "Bearer token");
   assert.equal(story.acceptanceCriteria[0].text, "Custom AC");
+});
+
+test("Jira stories do not require tests unless Jira explicitly says so", () => {
+  const story = jiraIssueToStory({
+    key: "SCRUM-7",
+    fields: {
+      summary: "Update discount calculation",
+      description: "Acceptance Criteria:\n- Discount is capped at 30 percent\n- Quote includes the cap reason"
+    }
+  }, { baseUrl: "https://jira.example.com" });
+
+  const report = runReview({ story, diffText: sampleDiff });
+
+  assert.equal(story.testExpectations.length, 0);
+  assert.equal(report.findings.some((finding) => finding.id === "TEST001"), false);
 });
 
 test("shouldFail respects configured threshold", () => {

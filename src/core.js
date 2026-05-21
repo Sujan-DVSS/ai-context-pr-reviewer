@@ -640,7 +640,10 @@ function reviewPerformance(files, additions, findings) {
 
 function reviewTestExpectations(story, files, findings) {
   const expectsTests = (story.testExpectations ?? []).length > 0
-    || story.acceptanceCriteria.some((criterion) => /test|verify|ensure|when/i.test(criterion.text));
+    || story.acceptanceCriteria.some((criterion) =>
+      /test|unit test|integration test|automated test|coverage/i.test(criterion.text)
+      || (criterion.mustTouch ?? []).some((pattern) => /(^|\/)(test|tests|__tests__|spec)(\/|$)|\.(test|spec)\./i.test(pattern))
+    );
   const hasTestChange = files.some((file) => isTestFile(displayPath(file)));
 
   if (expectsTests && !hasTestChange) {
@@ -649,7 +652,7 @@ function reviewTestExpectations(story, files, findings) {
       category: "tests",
       severity: "medium",
       title: "Story expects tests but no test file changed",
-      details: (story.testExpectations ?? []).join(" ") || "Acceptance criteria imply behavior that should be verified.",
+      details: (story.testExpectations ?? []).join(" ") || "Acceptance criteria explicitly mention tests.",
       recommendation: "Add focused tests or explain in the PR why existing coverage is sufficient."
     });
   }
