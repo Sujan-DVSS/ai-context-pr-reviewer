@@ -1,0 +1,19 @@
+{
+  "name": "ai-context-pr-reviewer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Context-aware PR review engine that validates code changes against story acceptance criteria.",
+  "type": "module",
+  "bin": {
+    "context-pr-review": "./src/index.js"
+  },
+  "scripts": {
+    "review": "node src/index.js",
+    "sample": "node src/index.js --story stories/sample-story.json --diff test/fixtures/sample.diff --repo-root test/fixtures/repo --out review-report.md --json review-report.json",
+    "sample:llm": "node src/index.js --story stories/sample-story.json --diff test/fixtures/sample.diff --repo-root test/fixtures/repo --llm-provider litellm --out review-report.md --json review-report.json",
+    "test": "node --test test/core.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

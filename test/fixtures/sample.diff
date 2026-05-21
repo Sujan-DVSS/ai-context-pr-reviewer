@@ -1,0 +1,41 @@
+diff --git a/src/payments/createPayment.js b/src/payments/createPayment.js
+index 1111111..2222222 100644
+--- a/src/payments/createPayment.js
++++ b/src/payments/createPayment.js
+@@ -1,8 +1,26 @@
+ export async function createPayment(request, db) {
++  const idempotencyKey = request.headers["Idempotency-Key"];
++  if (!idempotencyKey) {
++    return { status: 400, message: "missing Idempotency-Key" };
++  }
++
++  console.log("payment payload", request.body);
++
++  const existing = await db.query(
++    "SELECT * FROM payments WHERE idempotency_key = '" + idempotencyKey + "'"
++  );
++  if (existing.length > 0) {
++    return existing[0];
++  }
++
+   const payment = await db.payments.create({
+     amount: request.body.amount,
+     currency: request.body.currency
+   });
++
++  await db.idempotencyKeys.insert({
++    key: idempotencyKey,
++    paymentId: payment.id
++  });
+   return payment;
+ }
+diff --git a/src/refunds/refundPayment.js b/src/refunds/refundPayment.js
+index 3333333..4444444 100644
+--- a/src/refunds/refundPayment.js
++++ b/src/refunds/refundPayment.js
+@@ -2,6 +2,9 @@ export async function refundPayment(paymentId, db) {
+   const payment = await db.payments.find(paymentId);
++  // TODO: update refund retry handling
++  const secret = "abc1234567890";
+   return db.refunds.create({ paymentId: payment.id });
+ }

@@ -1,0 +1,98 @@
+name: AI Context PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  context-review:
+    name: Story-aware PR review
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Generate PR diff
+        run: |
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          git diff --unified=80 "origin/${{ github.base_ref }}...HEAD" > pr.diff
+
+      - name: Run context reviewer
+        env:
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          LITELLM_API_KEY: ${{ secrets.LITELLM_API_KEY }}
+          LITELLM_BASE_URL: ${{ secrets.LITELLM_BASE_URL || 'https://llmgw.codefest2026.marriott.com/' }}
+          LITELLM_MODEL: ${{ vars.LITELLM_MODEL || 'us.anthropic.claude-opus-4-7' }}
+        run: |
+          export PR_COMMITS="$(git log --format=%B "origin/${{ github.base_ref }}...HEAD")"
+          node src/index.js \
+            --diff pr.diff \
+            --stories-dir stories \
+            --repo-root . \
+            --max-context-files 700 \
+            --llm-provider auto \
+            --out review-report.md \
+            --json review-report.json \
+            --fail-on high
+
+      - name: Upload review artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: context-pr-review
+          path: |
+            pr.diff
+            review-report.md
+            review-report.json
+
+      - name: Post or update PR comment
+        if: always() && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const marker = "<!-- ai-context-pr-reviewer -->";
+            const report = fs.existsSync("review-report.md")
+              ? fs.readFileSync("review-report.md", "utf8")
+              : "Context review did not produce a report. Check workflow logs.";
+            const body = `${marker}\n${report}`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number
+            });
+            const existing = comments.find((comment) =>
+              comment.user?.type === "Bot" && comment.body?.includes(marker)
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body
+              });
+            }

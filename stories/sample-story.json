@@ -1,0 +1,71 @@
+{
+  "id": "PAY-123",
+  "title": "Add idempotency for checkout payment retries",
+  "description": "Customers should not be double charged when checkout retry requests are sent after a timeout or network failure.",
+  "inScopePaths": [
+    "src/payments/**",
+    "src/checkout/**",
+    "test/**"
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC1",
+      "text": "Requests with the same Idempotency-Key return the original payment result instead of creating a second charge.",
+      "keywords": [
+        "idempotency",
+        "Idempotency-Key",
+        "original payment result",
+        "duplicate payment"
+      ],
+      "mustTouch": [
+        "src/payments/**"
+      ],
+      "risk": "critical"
+    },
+    {
+      "id": "AC2",
+      "text": "A missing Idempotency-Key is rejected for checkout payment creation.",
+      "keywords": [
+        "Idempotency-Key",
+        "missing",
+        "reject"
+      ],
+      "mustTouch": [
+        "src/checkout/**",
+        "src/payments/**"
+      ],
+      "risk": "high"
+    },
+    {
+      "id": "AC3",
+      "text": "Automated tests cover duplicate retry behavior and missing-key validation.",
+      "keywords": [
+        "duplicate retry",
+        "missing key",
+        "idempotency"
+      ],
+      "mustTouch": [
+        "test/**"
+      ],
+      "risk": "high"
+    }
+  ],
+  "technicalConstraints": [
+    "Do not store raw card data.",
+    "Use the existing payment repository boundary."
+  ],
+  "securityExpectations": [
+    "No secrets, tokens, authorization headers, card data, or raw payment payloads should be logged."
+  ],
+  "performanceExpectations": [
+    "Idempotency lookup should not add more than one database query per checkout request."
+  ],
+  "testExpectations": [
+    "Add retry tests for duplicate payment requests.",
+    "Add validation tests for missing Idempotency-Key."
+  ],
+  "outOfScope": [
+    "refund",
+    "subscription cancellation"
+  ]
+}
