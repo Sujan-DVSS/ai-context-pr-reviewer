@@ -194,21 +194,28 @@ jobs:
             const report = JSON.parse(fs.readFileSync("review-report.json", "utf8"));
             const diff = fs.readFileSync("pr.diff", "utf8");
             const changedLines = collectAddedLines(diff);
+            const fallbackLines = await collectFallbackLines();
             const comments = [];
             const seen = new Set();
 
             for (const finding of report.findings ?? []) {
-              if (!finding.file || !Number.isInteger(finding.line)) {
+              if (!finding.file) {
                 continue;
               }
-              const key = `${finding.file}:${finding.line}`;
-              if (!changedLines.has(key) || seen.has(key)) {
+              const exactKey = Number.isInteger(finding.line) ? `${finding.file}:${finding.line}` : "";
+              const fallbackLine = fallbackLines.get(finding.file);
+              const line = changedLines.has(exactKey) ? finding.line : fallbackLine;
+              if (!line) {
+                continue;
+              }
+              const key = `${finding.file}:${line}`;
+              if (seen.has(key)) {
                 continue;
               }
               seen.add(key);
               comments.push({
                 path: finding.file,
-                line: finding.line,
+                line,
                 side: "RIGHT",
                 body: [
                   `**ReviewIQ: ${finding.severity?.toUpperCase() ?? "INFO"}**`,
@@ -267,4 +274,42 @@ jobs:
                 }
               }
               return added;
+            }
+
+            async function collectFallbackLines() {
+              const fallback = new Map();
+              const { owner, repo } = context.repo;
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner,
+                repo,
+                pull_number: context.issue.number
+              });
+              for (const file of files) {
+                const line = firstAddedLine(file.patch);
+                if (line) {
+                  fallback.set(file.filename, line);
+                }
+              }
+              return fallback;
+            }
+
+            function firstAddedLine(patch) {
+              if (!patch) {
+                return undefined;
+              }
+              let newLine = 0;
+              for (const line of patch.split(/\r?\n/)) {
+                const hunkMatch = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+                if (hunkMatch) {
+                  newLine = Number(hunkMatch[1]);
+                  continue;
+                }
+                if (line.startsWith("+") && !line.startsWith("+++")) {
+                  return newLine;
+                }
+                if (!line.startsWith("-") && !line.startsWith("\\")) {
+                  newLine += 1;
+                }
+              }
+              return undefined;
             }
