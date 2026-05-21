@@ -104,6 +104,29 @@ If the gateway is configured but temporarily fails, the GitHub Action still writ
 
 The workflow in `.github/workflows/context-pr-review.yml` runs on pull requests, creates a diff, runs the reviewer, uploads artifacts, and posts or updates a PR comment.
 
+For other repositories, use the reusable workflow from this central repo instead of copying the engine. See `docs/consumer-setup.md`.
+
+Minimal consumer workflow:
+
+```yaml
+name: AI Context PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  review:
+    uses: Sujan-DVSS/ai-context-pr-reviewer/.github/workflows/reusable-review.yml@main
+    secrets:
+      LITELLM_API_KEY: ${{ secrets.LITELLM_API_KEY }}
+```
+
 For the hackathon, keep a story file in `stories/<ticket-id>.json` and include the ticket ID in the branch name, PR title, PR body, or commit messages. If there is no exact match, the sample story is used as a fallback so the workflow still demonstrates end-to-end behavior.
 
 Examples that resolve to `stories/STRY-123.json`:
