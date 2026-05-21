@@ -42,7 +42,7 @@ Run against a real PR diff:
 
 ```bash
 git diff --unified=80 origin/main...HEAD > pr.diff
-node src/index.js --story stories/sample-story.json --diff pr.diff --repo-root . --out review-report.md --json review-report.json --fail-on high
+node src/index.js --story stories/sample-story.json --diff pr.diff --repo-root . --out review-report.md --json review-report.json --fail-on medium
 ```
 
 Disable repository scanning if you only want a diff-level review:
@@ -165,6 +165,7 @@ jobs:
     with:
       story-provider: auto
       jira-base-url: https://your-company.atlassian.net
+      fail-on: medium
       llm-provider: litellm
       llm-required: true
 ```
@@ -178,6 +179,8 @@ Examples that resolve to `stories/STRY-123.json`:
 - Commit message: `STRY-123 update feature eligibility`
 
 In GitHub Actions, `--repo-root .` lets the reviewer use the entire checked-out repository as context. It indexes a bounded number of text files, skips heavy generated folders such as `.git`, `node_modules`, `dist`, and `build`, and reports the top story-relevant files in the PR comment.
+
+ReviewIQ treats `medium`, `high`, and `critical` findings as must-fix issues that should block merging. `Low` findings may still appear as inline suggestions, but they are optional cleanup and should not make the merge check fail.
 
 To enable LiteLLM in GitHub Actions, add:
 

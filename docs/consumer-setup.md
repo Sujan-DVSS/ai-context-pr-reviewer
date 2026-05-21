@@ -47,7 +47,7 @@ jobs:
       story-provider: auto
       stories-dir: stories
       jira-base-url: https://your-company.atlassian.net
-      fail-on: high
+      fail-on: medium
       llm-provider: litellm
       llm-required: true
 ```
@@ -122,4 +122,5 @@ Open a PR whose branch, title, body, or commit message contains the story ID. Th
 - Run static, security, performance, and traceability checks.
 - Run LiteLLM semantic analysis when the key is configured.
 - Post or update a PR comment.
-- Post inline review comments for findings that map to changed PR lines.
+- Post plain-English inline review comments for findings that map to changed PR lines.
+- Fail the merge check for `medium`, `high`, and `critical` findings. `Low` findings can appear as optional inline suggestions without blocking the PR.

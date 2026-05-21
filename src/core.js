@@ -339,7 +339,7 @@ export function runReview({ story, diffText, repoContext, metadata = {} }) {
 
   const findingCounts = countFindings(findings);
   const maxSeverity = getMaxSeverity(findings);
-  const gate = maxSeverity === "critical" || maxSeverity === "high" ? "fail" : findings.length ? "warn" : "pass";
+  const gate = computeGate(maxSeverity, findings);
 
   return {
     metadata: {
@@ -818,7 +818,7 @@ export function mergeLlmReview(report, llmReview) {
   ]);
   const findingCounts = countFindings(findings);
   const maxSeverity = getMaxSeverity(findings);
-  const gate = maxSeverity === "critical" || maxSeverity === "high" ? "fail" : findings.length ? "warn" : "pass";
+  const gate = computeGate(maxSeverity, findings);
 
   return {
     ...report,
@@ -1033,6 +1033,13 @@ function getMaxSeverity(findings) {
   return findings
     .map((finding) => finding.severity)
     .sort((a, b) => SEVERITY_ORDER[b] - SEVERITY_ORDER[a])[0] ?? "none";
+}
+
+function computeGate(maxSeverity, findings) {
+  if (SEVERITY_ORDER[maxSeverity] >= SEVERITY_ORDER.medium) {
+    return "fail";
+  }
+  return findings.length ? "warn" : "pass";
 }
 
 function displayPath(file) {

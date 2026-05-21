@@ -36,6 +36,9 @@ export async function runLiteLlmSemanticReview({ story, diffText, repoContext, d
             "Review only the provided PR diff, story, deterministic findings, and retrieved repository context.",
             "Return strict JSON only. Do not wrap it in markdown.",
             "Prefer high-signal findings. Avoid duplicating deterministic findings unless you add semantic requirement context.",
+            "Write titles, details, and recommendations in plain English that a product owner or junior engineer can understand.",
+            "Use medium, high, or critical only when the PR should be fixed before merge. Use low for optional cleanup.",
+            "Do not treat explanatory code comments, TODO notes, or wording-only comments as bugs unless they hide a real functional, security, or requirement issue.",
             "Do not require tests unless the story, acceptance criteria, or explicit test expectations mention tests or coverage."
           ].join(" ")
         },

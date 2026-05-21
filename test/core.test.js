@@ -193,7 +193,30 @@ test("shouldFail respects configured threshold", () => {
   const report = runReview({ story: sampleStory, diffText: sampleDiff });
 
   assert.equal(shouldFail(report, "critical"), true);
+  assert.equal(shouldFail(report, "medium"), true);
   assert.equal(shouldFail(report, "none"), false);
+});
+
+test("low severity findings warn but do not block medium gate", () => {
+  const story = {
+    id: "DOC-1",
+    title: "Add TODO readme note",
+    description: "Add a TODO readme note for reviewers.",
+    acceptanceCriteria: []
+  };
+  const diffText = [
+    "diff --git a/README.md b/README.md",
+    "index 0000000..1111111 100644",
+    "--- a/README.md",
+    "+++ b/README.md",
+    "@@ -1,0 +1,1 @@",
+    "+TODO readme note"
+  ].join("\n");
+  const report = runReview({ story, diffText });
+
+  assert.equal(report.metadata.maxSeverity, "low");
+  assert.equal(report.metadata.gate, "warn");
+  assert.equal(shouldFail(report, "medium"), false);
 });
 
 test("mergeLlmReview adds semantic findings and updates report metadata", () => {

@@ -14,7 +14,7 @@ on:
       fail-on:
         description: Severity threshold that fails the workflow. Use none, low, medium, high, or critical.
         type: string
-        default: high
+        default: medium
       max-context-files:
         description: Maximum number of caller repository files to scan for context.
         type: number
@@ -227,7 +227,7 @@ jobs:
             const seen = new Set();
 
             for (const finding of report.findings ?? []) {
-              if (!finding.file) {
+              if (!finding.file || shouldSkipInlineFinding(finding)) {
                 continue;
               }
               const exactKey = Number.isInteger(finding.line) ? `${finding.file}:${finding.line}` : "";
@@ -245,14 +245,7 @@ jobs:
                 path: finding.file,
                 line,
                 side: "RIGHT",
-                body: [
-                  `**ReviewIQ: ${finding.severity?.toUpperCase() ?? "INFO"}**`,
-                  "",
-                  finding.title,
-                  "",
-                  finding.details ? `Details: ${finding.details}` : "",
-                  finding.recommendation ? `Recommendation: ${finding.recommendation}` : ""
-                ].filter(Boolean).join("\n")
+                body: buildInlineBody(finding)
               });
               if (comments.length >= 20) {
                 break;
@@ -273,6 +266,94 @@ jobs:
               body: `ReviewIQ posted ${comments.length} inline finding(s).`,
               comments
             });
+
+            function shouldSkipInlineFinding(finding) {
+              if (finding.id === "STATIC002") {
+                return true;
+              }
+              return finding.category === "static" && isCommentOnlyLine(finding.details);
+            }
+
+            function isCommentOnlyLine(value) {
+              const text = String(value ?? "").trim();
+              return /^(\/\/|\/\*|\*|#|<!--|--|;)/.test(text);
+            }
+
+            function buildInlineBody(finding) {
+              const severity = String(finding.severity ?? "low").toLowerCase();
+              const blocking = ["critical", "high", "medium"].includes(severity);
+              const title = plainTitle(finding);
+              const details = plainDetails(finding);
+              const recommendation = plainRecommendation(finding);
+              return [
+                `**ReviewIQ: ${blocking ? "Needs fix before merge" : "Suggestion"} (${severity.toUpperCase()})**`,
+                "",
+                title,
+                "",
+                details ? `Why this matters: ${details}` : "",
+                recommendation ? `What to change: ${recommendation}` : "",
+                blocking ? "" : "This is optional and should not block the merge."
+              ].filter(Boolean).join("\n");
+            }
+
+            function plainTitle(finding) {
+              const titles = {
+                STATIC001: "Please remove this debug output.",
+                STATIC003: "This line is hard to read.",
+                STATIC004: "This error is being ignored.",
+                SEC001: "This looks like a secret in the code.",
+                SEC002: "This runs code dynamically, which is risky.",
+                SEC003: "This may put unsafe HTML on the page.",
+                SEC004: "This database query may be unsafe.",
+                SEC005: "This may write sensitive data to logs.",
+                SEC007: "This security expectation needs a closer check.",
+                PERF003: "This database query may fetch more data than needed.",
+                PERF004: "This may block the app while it is running.",
+                PERF001: "This waits inside a loop and may be slow.",
+                PERF002: "This nested loop may become slow with more data."
+              };
+              return titles[finding.id] ?? sentence(finding.title) ?? "Please review this change.";
+            }
+
+            function plainDetails(finding) {
+              const details = {
+                STATIC001: "Debug or console output can leak information and creates noise in production logs.",
+                STATIC003: "Long lines are easy to miss during review and harder to maintain later.",
+                STATIC004: "If this fails in production, the app may hide the problem instead of handling it.",
+                SEC001: "Secrets committed to git can be copied by anyone with repository access.",
+                SEC002: "Running generated code can let unexpected input execute inside the app.",
+                SEC003: "Unsafe HTML can allow a user to inject content into another user's page.",
+                SEC004: "Building SQL with raw text can allow a user to change the query.",
+                SEC005: "Logs are often shared widely, so passwords, tokens, cards, or raw payloads should not be written there.",
+                PERF003: "Fetching every column can slow the query and expose data this flow does not need.",
+                PERF004: "Blocking work can make requests slower for users."
+              };
+              return details[finding.id] ?? sentence(finding.details);
+            }
+
+            function plainRecommendation(finding) {
+              const recommendation = {
+                STATIC001: "Remove it, or replace it with safe structured logging if the log is truly needed.",
+                STATIC003: "Split it into smaller pieces so reviewers can understand it quickly.",
+                STATIC004: "Handle the error, rethrow it, or add a clear reason why ignoring it is safe.",
+                SEC001: "Remove the value from code, rotate it, and read it from a secret manager.",
+                SEC002: "Use a safer implementation that does not execute generated code.",
+                SEC003: "Use safe rendering, or sanitize trusted HTML before rendering it.",
+                SEC004: "Use parameterized queries instead of string concatenation.",
+                SEC005: "Remove the sensitive value from the log or mask it before logging.",
+                PERF003: "Select only the columns this flow needs.",
+                PERF004: "Use the async/non-blocking version in request or hot paths."
+              };
+              return recommendation[finding.id] ?? sentence(finding.recommendation);
+            }
+
+            function sentence(value) {
+              const text = String(value ?? "").replace(/\s+/g, " ").trim();
+              if (!text) {
+                return "";
+              }
+              return text.endsWith(".") ? text : `${text}.`;
+            }
 
             function collectAddedLines(diffText) {
               const added = new Set();
