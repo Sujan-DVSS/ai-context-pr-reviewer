@@ -108,6 +108,8 @@ Use `--llm-provider auto` in CI to run the LLM only when `LITELLM_BASE_URL`, `LI
 
 If the gateway is configured but temporarily fails, the GitHub Action still writes the deterministic report and marks the LiteLLM section as failed. Add `--llm-required` if you want the workflow to fail when the LLM semantic pass cannot complete.
 
+If LLM review is mandatory and the LiteLLM gateway returns `403 Forbidden` from GitHub Actions, the most common cause is that the gateway blocks GitHub-hosted runner IPs. Use the reusable workflow input `runner-label: self-hosted` with a runner inside the allowed network, or ask the gateway owner to allow GitHub Actions runner egress.
+
 ## Story JSON Contract
 
 ```json
@@ -163,6 +165,8 @@ jobs:
     with:
       story-provider: auto
       jira-base-url: https://your-company.atlassian.net
+      llm-provider: litellm
+      llm-required: true
 ```
 
 For the hackathon, you can either configure Jira or keep a story file in `stories/<ticket-id>.json` and include the ticket ID in the branch name, PR title, PR body, or commit messages. If Jira is not configured and there is no exact JSON match, the sample story is used as a fallback so the workflow still demonstrates end-to-end behavior.

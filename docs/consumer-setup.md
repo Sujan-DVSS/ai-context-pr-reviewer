@@ -48,7 +48,8 @@ jobs:
       stories-dir: stories
       jira-base-url: https://your-company.atlassian.net
       fail-on: high
-      llm-provider: auto
+      llm-provider: litellm
+      llm-required: true
 ```
 
 ## 3. Configure Jira
@@ -100,6 +101,15 @@ with:
   litellm-base-url: https://llmgw.codefest2026.marriott.com/
   litellm-api-path: /chat/completions
   litellm-model: us.anthropic.claude-opus-4-7
+```
+
+If the LiteLLM gateway blocks GitHub-hosted runner IPs, use a self-hosted runner inside the allowed network:
+
+```yaml
+with:
+  runner-label: self-hosted
+  llm-provider: litellm
+  llm-required: true
 ```
 
 ## 5. Test

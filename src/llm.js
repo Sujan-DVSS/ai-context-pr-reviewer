@@ -50,7 +50,10 @@ export async function runLiteLlmSemanticReview({ story, diffText, repoContext, d
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`LiteLLM request failed with ${response.status}: ${text.slice(0, 500)}`);
+    const hint = response.status === 403
+      ? " Gateway returned 403 Forbidden. Check LiteLLM API key scope, gateway auth policy, and whether GitHub-hosted runner IPs are allowed. If the gateway is internal-only, use a self-hosted runner inside the allowed network."
+      : "";
+    throw new Error(`LiteLLM request failed with ${response.status}.${hint} ${text.slice(0, 500)}`);
   }
 
   const data = await response.json();
