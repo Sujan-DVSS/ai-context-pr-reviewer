@@ -99,8 +99,21 @@ jobs:
 
       - name: Generate PR diff
         run: |
-          git fetch origin "${{ github.base_ref }}" --depth=1
-          git diff --unified=80 "origin/${{ github.base_ref }}...HEAD" > pr.diff
+          BASE_REF="${{ github.base_ref }}"
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          git fetch origin "${BASE_REF}" --no-tags --prune
+
+          BASE_COMMIT="${BASE_SHA:-origin/${BASE_REF}}"
+          HEAD_COMMIT="${HEAD_SHA:-HEAD}"
+
+          if git merge-base "${BASE_COMMIT}" "${HEAD_COMMIT}" >/dev/null 2>&1; then
+            git diff --unified=80 "${BASE_COMMIT}...${HEAD_COMMIT}" > pr.diff
+          else
+            echo "No merge base found between ${BASE_COMMIT} and ${HEAD_COMMIT}; using direct tree diff."
+            git diff --unified=80 "${BASE_COMMIT}" "${HEAD_COMMIT}" > pr.diff
+          fi
 
       - name: Run context reviewer
         env:
@@ -118,7 +131,18 @@ jobs:
           LITELLM_API_KEY: ${{ secrets.LITELLM_API_KEY }}
           LITELLM_MODEL: ${{ inputs.litellm-model }}
         run: |
-          export PR_COMMITS="$(git log --format=%B "origin/${{ github.base_ref }}...HEAD")"
+          BASE_REF="${{ github.base_ref }}"
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          BASE_COMMIT="${BASE_SHA:-origin/${BASE_REF}}"
+          HEAD_COMMIT="${HEAD_SHA:-HEAD}"
+
+          if git merge-base "${BASE_COMMIT}" "${HEAD_COMMIT}" >/dev/null 2>&1; then
+            export PR_COMMITS="$(git log --format=%B "${BASE_COMMIT}...${HEAD_COMMIT}")"
+          else
+            export PR_COMMITS="$(git log --format=%B "${HEAD_COMMIT}" -n 20)"
+          fi
+
           LLM_REQUIRED_FLAG=""
           if [ "${{ inputs.llm-required }}" = "true" ]; then
             LLM_REQUIRED_FLAG="--llm-required"
