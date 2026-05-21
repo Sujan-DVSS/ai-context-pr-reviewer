@@ -1,6 +1,6 @@
 # Consumer Repository Setup
 
-Use this when you want another repository to run the central AI Context PR Reviewer without copying the engine.
+Use this when you want another repository to run the central ReviewIQ reviewer without copying the engine.
 
 ## 1. Connect Story Context
 
@@ -25,7 +25,7 @@ STRY-123 update eligibility checks
 Create `.github/workflows/ai-context-pr-review.yml` in the application repository:
 
 ```yaml
-name: AI Context PR Review
+name: ReviewIQ
 
 on:
   pull_request:

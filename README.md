@@ -1,6 +1,6 @@
-# AI Context PR Reviewer
+# ReviewIQ
 
-Hackathon MVP for an AI context-aware code peer review bot. It runs when a pull request is opened or updated, reads the PR diff, scans the repository for story-relevant implementation context, reads the related user story from JSON, and produces a review that connects implementation evidence back to the story description and acceptance criteria.
+Hackathon MVP for an AI context-aware code peer review bot. ReviewIQ runs when a pull request is opened or updated, reads the PR diff, scans the repository for story-relevant implementation context, reads the related user story from JSON or Jira, and produces a review that connects implementation evidence back to the story description and acceptance criteria.
 
 The MVP is intentionally dependency-light and can run without API keys. JSON is the fallback story provider today; Jira REST can pull live issue details when configured. If a LiteLLM gateway is configured, the reviewer also runs an LLM semantic pass.
 
@@ -141,7 +141,7 @@ For other repositories, use the reusable workflow from this central repo instead
 Minimal consumer workflow:
 
 ```yaml
-name: AI Context PR Review
+name: ReviewIQ
 
 on:
   pull_request:

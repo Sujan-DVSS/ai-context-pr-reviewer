@@ -1,4 +1,4 @@
-name: AI Context PR Review
+name: ReviewIQ
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   context-review:
-    name: Story-aware PR review
+    name: ReviewIQ
     runs-on: ubuntu-latest
 
     steps:
@@ -62,7 +62,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: context-pr-review
+          name: reviewiq-report
           path: |
             pr.diff
             review-report.md
@@ -74,11 +74,12 @@ jobs:
         with:
           script: |
             const fs = require("fs");
-            const marker = "<!-- ai-context-pr-reviewer -->";
+            const marker = "<!-- reviewiq -->";
             const report = fs.existsSync("review-report.md")
               ? fs.readFileSync("review-report.md", "utf8")
-              : "Context review did not produce a report. Check workflow logs.";
-            const body = `${marker}\n${report}`;
+              : "ReviewIQ did not produce a report. Check workflow logs.";
+            const badge = "![ReviewIQ](https://img.shields.io/badge/ReviewIQ-AI%20Code%20Review-5B5FC7?style=for-the-badge)";
+            const body = `${marker}\n${badge}\n\n${report}`;
             const { owner, repo } = context.repo;
             const issue_number = context.issue.number;
             const comments = await github.paginate(github.rest.issues.listComments, {
@@ -128,7 +129,7 @@ jobs:
                 path: finding.file,
                 line: finding.line,
                 side: "RIGHT",
-                body: `**AI Context Review: ${finding.severity?.toUpperCase() ?? "INFO"}**\n\n${finding.title}\n\nDetails: ${finding.details}\n\nRecommendation: ${finding.recommendation}`
+                body: `**ReviewIQ: ${finding.severity?.toUpperCase() ?? "INFO"}**\n\n${finding.title}\n\nDetails: ${finding.details}\n\nRecommendation: ${finding.recommendation}`
               });
               if (comments.length >= 20) break;
             }
@@ -139,7 +140,7 @@ jobs:
               repo,
               pull_number: context.issue.number,
               event: "COMMENT",
-              body: `AI Context Reviewer posted ${comments.length} inline finding(s).`,
+              body: `ReviewIQ posted ${comments.length} inline finding(s).`,
               comments
             });
             function collectAddedLines(diffText) {

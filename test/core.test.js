@@ -50,7 +50,7 @@ test("renderMarkdownReport includes the AC evidence matrix", () => {
   assert.match(markdown, /Acceptance Criteria Evidence/);
   assert.match(markdown, /Repo Context/);
   assert.match(markdown, /AC1/);
-  assert.match(markdown, /AI Context PR Review/);
+  assert.match(markdown, /ReviewIQ/);
 });
 
 test("buildRepoContext scores repository files against story terms", () => {

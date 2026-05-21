@@ -172,7 +172,7 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-  console.log(`AI Context PR Reviewer
+  console.log(`ReviewIQ
 
 Usage:
   node src/index.js --story stories/ABC-123.json --diff pr.diff
