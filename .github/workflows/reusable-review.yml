@@ -285,40 +285,38 @@ jobs:
               const severity = String(finding.severity ?? "low").toLowerCase();
               const title = plainTitle(finding);
               const observation = sentence(finding.details) || plainDetails(finding);
-              const actual = plainDetails(finding);
               const recommendation = plainRecommendation(finding);
               const storyRef = report.metadata?.storyId ?? "Unknown story";
               const reviewedAt = report.metadata?.generatedAt ?? new Date().toISOString();
               const reviewId = `CR-${sanitizeReviewId(storyRef)}-${String(sequence).padStart(3, "0")}`;
               const acReference = acceptanceReference(finding, storyRef);
+              const location = [
+                `**Jira / AC:** ${acReference}`,
+                `**File:** \`${finding.file}\``,
+                `**Line:** ${lineRange(finding, reviewLine)}`,
+                methodName(finding) ? `**Function:** ${methodName(finding)}` : ""
+              ].filter(Boolean).join("  \n");
               return [
                 `### ReviewIQ: ${title}`,
                 "",
-                `**${severityLabel(severity)}** · **${categoryLabel(finding.category)}** · \`${reviewId}\` · **Status:** Open`,
+                `**${severityLabel(severity)}** · **${categoryLabel(finding.category)}** · \`${reviewId}\` · **Open**`,
                 "",
-                `**Story:** ${storyRef}  `,
-                `**File:** \`${finding.file}\`  `,
-                `**Line:** ${lineRange(finding, reviewLine)}  `,
-                `**Function:** ${methodName(finding)}`,
+                location,
+                "",
                 "",
                 "---",
                 "",
-                "#### What we found",
+                "**Problem**",
                 observation,
                 "",
-                "#### What should happen",
+                "**Expected**",
                 expectedBehaviour(finding),
                 "",
-                "#### What is happening now",
-                actual,
-                "",
-                "#### How to fix",
+                "**Fix**",
                 recommendation,
                 suggestionBlock(finding, exactLineMatch),
                 "",
-                `**Jira / AC:** ${acReference}`,
-                "",
-                `_Reviewed by AI Review Assistant at ${reviewedAt}._`
+                `<sub>Reviewed by AI Review Assistant at ${reviewedAt}</sub>`
               ].filter(Boolean).join("\n");
             }
 
@@ -367,7 +365,7 @@ jobs:
             }
 
             function methodName(finding) {
-              return finding.method ?? finding.functionName ?? "Not sure from this diff";
+              return finding.method ?? finding.functionName ?? "";
             }
 
             function expectedBehaviour(finding) {
