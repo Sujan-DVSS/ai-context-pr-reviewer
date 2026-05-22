@@ -297,29 +297,32 @@ jobs:
               const acReference = acceptanceReference(finding, storyRef);
               const functionName = methodName(finding);
               const expected = expectedBehaviour(finding);
+              const location = [
+                `**Jira / AC:** ${acReference}`,
+                `**File:** \`${finding.file}\``,
+                `**Line:** ${lineRange(finding, reviewLine)}`,
+                functionName ? `**Function:** ${functionName}` : ""
+              ].filter(Boolean).join("  \n");
               return [
-                `**ReviewIQ found:** ${title}`,
+                `### ReviewIQ: ${title}`,
                 "",
-                `> ${observation}`,
+                `**${severityLabel(severity)}** · **${categoryLabel(finding.category)}** · \`${reviewId}\` · **Open**`,
                 "",
-                `**Fix:** ${recommendation}`,
+                location,
+                "",
+                "---",
+                "",
+                "**Problem**",
+                observation,
+                "",
+                "**Expected**",
+                expected,
+                "",
+                "**Fix**",
+                recommendation,
                 suggestionBlock(finding, exactLineMatch),
                 "",
-                `<details>`,
-                `<summary>Review details</summary>`,
-                "",
-                `- **Severity:** ${severityLabel(severity)}`,
-                `- **Category:** ${categoryLabel(finding.category)}`,
-                `- **Status:** Open`,
-                `- **Review ID:** \`${reviewId}\``,
-                `- **Jira / AC:** ${acReference}`,
-                `- **File:** \`${finding.file}\``,
-                `- **Line:** ${lineRange(finding, reviewLine)}`,
-                functionName ? `- **Function:** ${functionName}` : "",
-                `- **Expected:** ${expected}`,
-                `- **Reviewed at:** ${reviewedAt}`,
-                "",
-                `</details>`
+                `<sub>Reviewed by AI Review Assistant at ${reviewedAt}</sub>`
               ].filter(Boolean).join("\n");
             }
 
