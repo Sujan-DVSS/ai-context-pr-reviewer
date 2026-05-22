@@ -38,6 +38,7 @@ export async function runLiteLlmSemanticReview({ story, diffText, repoContext, d
             "Report only useful issues. Do not repeat rule-based findings unless you explain the Jira impact in simple words.",
             "Use simple English. Write short sentences. Avoid jargon, idioms, and abstract words.",
             "Explain the issue so a developer, tester, product owner, or support engineer can understand it.",
+            "Keep title under 90 characters. Keep details under 300 characters. Keep recommendation under 220 characters.",
             "Use medium, high, or critical only when the PR should be fixed before merge. Use low for optional cleanup.",
             "Do not treat explanatory code comments, TODO notes, or wording-only comments as bugs unless they hide a real functional, security, or requirement issue.",
             "Include suggestedReplacement only when you are confident a single-line GitHub suggestion would be safe to apply.",

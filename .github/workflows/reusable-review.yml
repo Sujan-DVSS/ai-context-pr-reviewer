@@ -289,39 +289,37 @@ jobs:
             function buildInlineBody(finding, sequence, reviewLine, exactLineMatch) {
               const severity = String(finding.severity ?? "low").toLowerCase();
               const title = plainTitle(finding);
-              const observation = sentence(finding.details) || plainDetails(finding);
-              const recommendation = plainRecommendation(finding);
+              const observation = shorten(sentence(finding.details) || plainDetails(finding), 420);
+              const recommendation = shorten(plainRecommendation(finding), 320);
               const storyRef = report.metadata?.storyId ?? "Unknown story";
               const reviewedAt = report.metadata?.generatedAt ?? new Date().toISOString();
               const reviewId = `CR-${sanitizeReviewId(storyRef)}-${String(sequence).padStart(3, "0")}`;
               const acReference = acceptanceReference(finding, storyRef);
-              const location = [
-                `**Jira / AC:** ${acReference}`,
-                `**File:** \`${finding.file}\``,
-                `**Line:** ${lineRange(finding, reviewLine)}`,
-                methodName(finding) ? `**Function:** ${methodName(finding)}` : ""
-              ].filter(Boolean).join("  \n");
+              const functionName = methodName(finding);
+              const expected = expectedBehaviour(finding);
               return [
-                `### ReviewIQ: ${title}`,
+                `**ReviewIQ found:** ${title}`,
                 "",
-                `**${severityLabel(severity)}** · **${categoryLabel(finding.category)}** · \`${reviewId}\` · **Open**`,
+                `> ${observation}`,
                 "",
-                location,
-                "",
-                "",
-                "---",
-                "",
-                "**Problem**",
-                observation,
-                "",
-                "**Expected**",
-                expectedBehaviour(finding),
-                "",
-                "**Fix**",
-                recommendation,
+                `**Fix:** ${recommendation}`,
                 suggestionBlock(finding, exactLineMatch),
                 "",
-                `<sub>Reviewed by AI Review Assistant at ${reviewedAt}</sub>`
+                `<details>`,
+                `<summary>Review details</summary>`,
+                "",
+                `- **Severity:** ${severityLabel(severity)}`,
+                `- **Category:** ${categoryLabel(finding.category)}`,
+                `- **Status:** Open`,
+                `- **Review ID:** \`${reviewId}\``,
+                `- **Jira / AC:** ${acReference}`,
+                `- **File:** \`${finding.file}\``,
+                `- **Line:** ${lineRange(finding, reviewLine)}`,
+                functionName ? `- **Function:** ${functionName}` : "",
+                `- **Expected:** ${expected}`,
+                `- **Reviewed at:** ${reviewedAt}`,
+                "",
+                `</details>`
               ].filter(Boolean).join("\n");
             }
 
@@ -455,6 +453,11 @@ jobs:
                 return "";
               }
               return text.endsWith(".") ? text : `${text}.`;
+            }
+
+            function shorten(value, maxLength) {
+              const text = sentence(value);
+              return text.length <= maxLength ? text : `${text.slice(0, maxLength - 1).trim()}...`;
             }
 
             function collectAddedLines(diffText) {
