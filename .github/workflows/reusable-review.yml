@@ -292,35 +292,33 @@ jobs:
               const reviewId = `CR-${sanitizeReviewId(storyRef)}-${String(sequence).padStart(3, "0")}`;
               const acReference = acceptanceReference(finding, storyRef);
               return [
-                `**Review ID:** ${reviewId}`,
-                `**Severity:** ${severityLabel(severity)}`,
-                `**Category:** ${categoryLabel(finding.category)}`,
-                `**Story:** ${storyRef}`,
+                `### ReviewIQ: ${title}`,
                 "",
-                `**File:** ${finding.file}`,
-                `**Line(s):** ${lineRange(finding, reviewLine)}`,
+                `**${severityLabel(severity)}** · **${categoryLabel(finding.category)}** · \`${reviewId}\` · **Status:** Open`,
+                "",
+                `**Story:** ${storyRef}  `,
+                `**File:** \`${finding.file}\`  `,
+                `**Line:** ${lineRange(finding, reviewLine)}  `,
                 `**Function:** ${methodName(finding)}`,
                 "",
-                `**Title:** ${title}`,
+                "---",
                 "",
-                "**What we found:**",
+                "#### What we found",
                 observation,
                 "",
-                "**What should happen:**",
+                "#### What should happen",
                 expectedBehaviour(finding),
                 "",
-                "**What is happening now:**",
+                "#### What is happening now",
                 actual,
                 "",
-                "**How to fix:**",
+                "#### How to fix",
                 recommendation,
                 suggestionBlock(finding, exactLineMatch),
                 "",
-                `**Jira / AC reference:** ${acReference}`,
+                `**Jira / AC:** ${acReference}`,
                 "",
-                "**Author:** AI Review Assistant",
-                `**Reviewed at:** ${reviewedAt}`,
-                "**Status:** Open"
+                `_Reviewed by AI Review Assistant at ${reviewedAt}._`
               ].filter(Boolean).join("\n");
             }
 
