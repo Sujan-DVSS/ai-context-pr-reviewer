@@ -228,26 +228,31 @@ jobs:
             const seen = new Set();
 
             for (const finding of report.findings ?? []) {
-              if (!finding.file || shouldSkipInlineFinding(finding)) {
+              if (shouldSkipInlineFinding(finding)) {
                 continue;
               }
-              const exactKey = Number.isInteger(finding.line) ? `${finding.file}:${finding.line}` : "";
+              const targetFile = finding.file ?? fallbackLines.keys().next().value;
+              if (!targetFile) {
+                continue;
+              }
+              const displayFinding = { ...finding, file: targetFile };
+              const exactKey = Number.isInteger(finding.line) ? `${targetFile}:${finding.line}` : "";
               const exactLineMatch = changedLines.has(exactKey);
-              const fallbackLine = fallbackLines.get(finding.file);
+              const fallbackLine = fallbackLines.get(targetFile);
               const line = exactLineMatch ? finding.line : fallbackLine;
               if (!line) {
                 continue;
               }
-              const key = `${finding.file}:${line}`;
+              const key = `${targetFile}:${line}`;
               if (seen.has(key)) {
                 continue;
               }
               seen.add(key);
               comments.push({
-                path: finding.file,
+                path: targetFile,
                 line,
                 side: "RIGHT",
-                body: buildInlineBody(finding, comments.length + 1, line, exactLineMatch)
+                body: buildInlineBody(displayFinding, comments.length + 1, line, exactLineMatch)
               });
               if (comments.length >= 20) {
                 break;
