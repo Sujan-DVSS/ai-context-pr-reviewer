@@ -121,7 +121,7 @@ name: ReviewIQ
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, edited, labeled, unlabeled]
 
 permissions:
   contents: read
@@ -155,6 +155,8 @@ In GitHub Actions, `--repo-root .` lets the reviewer use the entire checked-out 
 The workflow uploads `review-dashboard.html` as an artifact with AC coverage percentage, severity counts, changed files vs relevant repo files, LiteLLM status, story alignment score, and merge recommendation.
 
 ReviewIQ treats `medium`, `high`, and `critical` findings as must-fix issues that should block merging. `Low` findings may still appear as inline suggestions, but they are optional cleanup and should not make the merge check fail.
+
+Reviewers can intentionally skip ReviewIQ by adding the `reviewiq-ignore` label to the PR or by putting `[reviewiq ignore]` or `[skip reviewiq]` in the PR body. The workflow posts a skipped report, clears previous ReviewIQ inline comments when it has permission, and keeps the merge check green. Reusable workflow consumers can rename the label with `ignore-label`.
 
 To enable LiteLLM in GitHub Actions, add:
 

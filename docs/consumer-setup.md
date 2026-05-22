@@ -23,7 +23,7 @@ name: ReviewIQ
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, edited, labeled, unlabeled]
 
 permissions:
   contents: read
@@ -105,7 +105,18 @@ with:
   llm-required: true
 ```
 
-## 5. Test
+## 5. Optional Reviewer Bypass
+
+If a human reviewer decides the AI review should not block the PR, add the `reviewiq-ignore` label to the PR or put `[reviewiq ignore]` / `[skip reviewiq]` in the PR body.
+
+The workflow will skip ReviewIQ, post a skipped report, clear previous ReviewIQ inline comments when the GitHub token has permission, and keep the check green. To use a different label name:
+
+```yaml
+with:
+  ignore-label: ai-review-ignored
+```
+
+## 6. Test
 
 Open a PR whose branch, title, body, or commit message contains the story ID. The workflow will:
 
@@ -120,3 +131,4 @@ Open a PR whose branch, title, body, or commit message contains the story ID. Th
 - Upload `review-dashboard.html` with AC coverage, severity count, changed-vs-relevant files, LLM result, story alignment score, and merge recommendation.
 - Flag cross-story conflicts when changed code references a different Jira ID or an out-of-scope story area.
 - Fail the merge check for `medium`, `high`, and `critical` findings. `Low` findings can appear as optional inline suggestions without blocking the PR.
+- Skip the AI review when a reviewer uses the configured ignore label or skip marker.

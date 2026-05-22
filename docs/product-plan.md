@@ -54,7 +54,8 @@ Later:
    - Top story-relevant repository files
    - Suggested reviewer questions
 8. Workflow posts or updates a PR comment.
-9. Optional quality gate fails the check on high or critical findings.
+9. Optional quality gate fails the check on medium, high, or critical findings.
+10. Reviewer can intentionally bypass the AI gate with a configured PR label or skip marker when human judgment should override the bot.
 
 ## What Makes It Different
 
