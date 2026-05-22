@@ -202,24 +202,24 @@ jobs:
                 "",
                 `**File:** ${finding.file}`,
                 `**Line(s):** ${lineRange(finding, reviewLine)}`,
-                `**Method / Function:** ${methodName(finding)}`,
+                `**Function:** ${methodName(finding)}`,
                 "",
                 `**Title:** ${title}`,
                 "",
-                "**Observation:**",
+                "**What we found:**",
                 observation,
                 "",
-                "**Expected behaviour:**",
+                "**What should happen:**",
                 expectedBehaviour(finding),
                 "",
-                "**Actual behaviour:**",
+                "**What is happening now:**",
                 actual,
                 "",
-                "**Suggested fix:**",
+                "**How to fix:**",
                 recommendation,
                 suggestionBlock(finding, exactLineMatch),
                 "",
-                `**Acceptance Criteria reference:** ${acReference}`,
+                `**Jira / AC reference:** ${acReference}`,
                 "",
                 "**Author:** AI Review Assistant",
                 `**Reviewed at:** ${reviewedAt}`,
@@ -266,22 +266,22 @@ jobs:
               return start === end ? String(start) : `${start}-${end}`;
             }
             function methodName(finding) {
-              return finding.method ?? finding.functionName ?? "Not detected from diff";
+              return finding.method ?? finding.functionName ?? "Not sure from this diff";
             }
             function expectedBehaviour(finding) {
               if (finding.category === "security") {
-                return "The change should not expose secrets, unsafe input, or sensitive customer data.";
+                return "Secrets, customer data, and unsafe input should not be exposed.";
               }
               if (finding.category === "performance") {
-                return "The change should avoid unnecessary slowdowns in user-facing or frequently used code paths.";
+                return "The change should not make user-facing code slower.";
               }
               if (finding.category === "static") {
-                return "The code should be easy to maintain and should not hide errors or debug-only behavior.";
+                return "The code should be easy to read and safe to run in production.";
               }
               if (finding.category === "tests") {
-                return "The story should include the test evidence it explicitly asks for.";
+                return "If Jira asks for tests, the PR should include them.";
               }
-              return "The implementation should match the linked story and acceptance criteria.";
+              return "The code should match the Jira story and ACs.";
             }
             function acceptanceReference(finding, storyRef) {
               const text = [finding.title, finding.details, finding.recommendation].filter(Boolean).join(" ");
@@ -293,15 +293,15 @@ jobs:
             }
             function plainTitle(finding) {
               const titles = {
-                STATIC001: "Please remove this debug output.",
+                STATIC001: "Remove this debug log.",
                 STATIC003: "This line is hard to read.",
-                STATIC004: "This error is being ignored.",
+                STATIC004: "This error is ignored.",
                 SEC001: "This looks like a secret in the code.",
-                SEC002: "This runs code dynamically, which is risky.",
-                SEC003: "This may put unsafe HTML on the page.",
+                SEC002: "This runs generated code.",
+                SEC003: "This may show unsafe HTML.",
                 SEC004: "This database query may be unsafe.",
                 SEC005: "This may write sensitive data to logs.",
-                SEC007: "This security expectation needs a closer check.",
+                SEC007: "This security rule needs a closer check.",
                 PERF003: "This database query may fetch more data than needed.",
                 PERF004: "This may block the app while it is running.",
                 PERF001: "This waits inside a loop and may be slow.",
@@ -311,14 +311,14 @@ jobs:
             }
             function plainDetails(finding) {
               const details = {
-                STATIC001: "Debug or console output can leak information and creates noise in production logs.",
+                STATIC001: "Debug logs can expose data and make production logs noisy.",
                 STATIC003: "Long lines are easy to miss during review and harder to maintain later.",
                 STATIC004: "If this fails in production, the app may hide the problem instead of handling it.",
                 SEC001: "Secrets committed to git can be copied by anyone with repository access.",
-                SEC002: "Running generated code can let unexpected input execute inside the app.",
-                SEC003: "Unsafe HTML can allow a user to inject content into another user's page.",
+                SEC002: "Generated code can run things we did not expect.",
+                SEC003: "Unsafe HTML can let one user show harmful content to another user.",
                 SEC004: "Building SQL with raw text can allow a user to change the query.",
-                SEC005: "Logs are often shared widely, so passwords, tokens, cards, or raw payloads should not be written there.",
+                SEC005: "Logs are often shared. Passwords, tokens, cards, and raw payloads should not be logged.",
                 PERF003: "Fetching every column can slow the query and expose data this flow does not need.",
                 PERF004: "Blocking work can make requests slower for users."
               };
@@ -326,11 +326,11 @@ jobs:
             }
             function plainRecommendation(finding) {
               const recommendation = {
-                STATIC001: "Remove it, or replace it with safe structured logging if the log is truly needed.",
+                STATIC001: "Remove it. If the log is needed, make sure it is safe for production.",
                 STATIC003: "Split it into smaller pieces so reviewers can understand it quickly.",
-                STATIC004: "Handle the error, rethrow it, or add a clear reason why ignoring it is safe.",
+                STATIC004: "Handle the error, throw it again, or explain why it is safe to ignore.",
                 SEC001: "Remove the value from code, rotate it, and read it from a secret manager.",
-                SEC002: "Use a safer implementation that does not execute generated code.",
+                SEC002: "Use a safer approach that does not run generated code.",
                 SEC003: "Use safe rendering, or sanitize trusted HTML before rendering it.",
                 SEC004: "Use parameterized queries instead of string concatenation.",
                 SEC005: "Remove the sensitive value from the log or mask it before logging.",

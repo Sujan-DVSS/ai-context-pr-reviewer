@@ -380,9 +380,9 @@ function evaluateAcceptanceCriteria(story, files, additions, findings, repoConte
         id: "TRACE004",
         category: "traceability",
         severity: criterion.risk === "critical" ? "high" : "medium",
-        title: `Acceptance criterion ${criterion.id ?? ""} needs evidence`.trim(),
+        title: `AC ${criterion.id ?? ""} is not clear in this PR`.trim(),
         details: criterion.text,
-        recommendation: "Add implementation or tests that clearly demonstrate this AC, or update the story if the scope changed."
+        recommendation: "Add the code or test that proves this AC is done. If the AC changed, update the Jira story."
       });
     }
 
@@ -449,18 +449,18 @@ function reviewTraceability(story, files, additions, acceptance, findings, repoC
       id: "TRACE001",
       category: "traceability",
       severity: "high",
-      title: "PR diff has weak story alignment",
-      details: "The changed paths and added lines have very little vocabulary overlap with the story description or acceptance criteria.",
-      recommendation: "Confirm the PR is linked to the right story, or add clearer code/tests that reflect the story language."
+      title: "This PR may not match the Jira story",
+      details: "The changed files and new code do not look related to the Jira story or ACs.",
+      recommendation: "Check that this PR is linked to the correct Jira story. If it is correct, add clearer code or tests for the ACs."
     });
   } else if (files.length > 0 && ratio < 0.12) {
     findings.push({
       id: "TRACE001",
       category: "traceability",
       severity: "medium",
-      title: "PR diff may be drifting from story context",
-      details: `Only ${overlap.length} important story terms were found in the changed code or paths.`,
-      recommendation: "Review whether the implementation is too indirect, too broad, or missing story-specific tests."
+      title: "This PR may be moving away from the Jira story",
+      details: `Only ${overlap.length} important Jira story words were found in the changed code or file paths.`,
+      recommendation: "Check if the PR is too broad, changing the wrong area, or missing code/tests for the story."
     });
   }
 
@@ -475,9 +475,9 @@ function reviewTraceability(story, files, additions, acceptance, findings, repoC
         id: "TRACE002",
         category: "traceability",
         severity: driftedFiles.length > 3 ? "high" : "medium",
-        title: "Changed files fall outside the story scope",
+        title: "This PR changes files outside the story",
         details: `Unexpected files: ${driftedFiles.slice(0, 8).join(", ")}`,
-        recommendation: "Split unrelated changes into another PR, or add story context explaining why these files are required."
+        recommendation: "Move unrelated changes to another PR, or explain in Jira why these files are needed."
       });
     }
   }
@@ -490,9 +490,9 @@ function reviewTraceability(story, files, additions, acceptance, findings, repoC
         id: "TRACE003",
         category: "traceability",
         severity: "high",
-        title: `PR touches out-of-scope area: ${outOfScope}`,
-        details: "The story explicitly marks this area as out of scope.",
-        recommendation: "Remove the change from this PR or update the story with product approval."
+        title: `This PR changes an out-of-scope area: ${outOfScope}`,
+        details: "The Jira story says this area is not part of the work.",
+        recommendation: "Remove this change, or update Jira after product approval."
       });
     }
   }
@@ -502,9 +502,9 @@ function reviewTraceability(story, files, additions, acceptance, findings, repoC
       id: "TRACE005",
       category: "traceability",
       severity: "medium",
-      title: "Acceptance criteria coverage is incomplete",
-      details: "One or more ACs do not have clear evidence in changed files or added lines.",
-      recommendation: "Use the AC evidence matrix to focus reviewer attention before approval."
+      title: "Some ACs are not clearly covered",
+      details: "One or more ACs do not have clear proof in the changed files.",
+      recommendation: "Check the AC table before approving this PR."
     });
   }
 
@@ -519,9 +519,9 @@ function reviewTraceability(story, files, additions, acceptance, findings, repoC
         id: "TRACE006",
         category: "traceability",
         severity: "medium",
-        title: "PR does not touch the repo files most relevant to the story",
+        title: "This PR may not change the right files",
         details: `Most relevant repo files: ${highContextFiles.map((file) => file.path).join(", ")}`,
-        recommendation: "Confirm this PR is changing the correct implementation area, or update story keywords/scope if the relevant files are elsewhere."
+        recommendation: "Check if the change should be made in one of these files. If not, explain why in the PR."
       });
     }
   }
@@ -540,9 +540,9 @@ function reviewCrossStoryConflicts(story, files, additions, findings, metadata) 
       id: "CROSS001",
       category: "traceability",
       severity: "high",
-      title: "PR appears to reference another Jira story",
+      title: "This PR may include work from another Jira story",
       details: `Other Jira IDs found in changed code or paths: ${otherTicketIds.slice(0, 5).join(", ")}`,
-      recommendation: "Move that behavior into the correct story PR, or confirm in Jira that this story intentionally covers those references."
+      recommendation: "Move that work to the correct PR, or confirm in Jira that this story includes it."
     });
   }
 }
@@ -553,27 +553,27 @@ function reviewStaticQuality(files, additions, findings) {
       id: "STATIC000",
       category: "static",
       severity: "medium",
-      title: "Large PR blast radius",
+      title: "This PR changes many files",
       details: `This PR changes ${files.length} files.`,
-      recommendation: "Consider splitting the change, or provide a stronger review plan in the PR description."
+      recommendation: "Split the PR if possible. If not, add a short review plan in the PR description."
     });
   }
 
   for (const line of additions) {
     const text = line.content;
     if (/\b(debugger|console\.log|printStackTrace)\b/.test(text)) {
-      addLineFinding(findings, "STATIC001", "static", "medium", "Debug or console statement added", line, "Remove debug output or replace it with structured, safe logging.", {
+      addLineFinding(findings, "STATIC001", "static", "medium", "Debug log added", line, "Remove this debug log. If the log is needed, make sure it is safe for production.", {
         suggestedReplacement: ""
       });
     }
     if (/\b(TODO|FIXME|HACK)\b/i.test(text)) {
-      addLineFinding(findings, "STATIC002", "static", "low", "Unresolved marker added", line, "Resolve the marker before merge or link it to a tracked follow-up.");
+      addLineFinding(findings, "STATIC002", "static", "low", "TODO/FIXME added", line, "Finish this item or link it to a tracked follow-up.");
     }
     if (text.length > 160) {
       addLineFinding(findings, "STATIC003", "static", "low", "Very long changed line", line, "Split the line for readability and simpler review.");
     }
     if (/catch\s*\([^)]*\)\s*\{\s*\}/.test(text) || /catch\s*\([^)]*\)\s*\{\s*return\s*;?\s*\}/.test(text)) {
-      addLineFinding(findings, "STATIC004", "static", "high", "Exception is swallowed", line, "Handle the error, rethrow it, or explain why it is safe to ignore.");
+      addLineFinding(findings, "STATIC004", "static", "high", "Error is ignored", line, "Handle the error, throw it again, or explain why it is safe to ignore.");
     }
   }
 }
@@ -585,16 +585,16 @@ function reviewSecurity(story, files, additions, findings) {
   for (const line of additions) {
     const text = line.content;
     if (/(api[_-]?key|secret|password|passwd|token|private[_-]?key)\s*[:=]\s*["'][^"']{8,}["']/i.test(text) || /-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----/.test(text)) {
-      addLineFinding(findings, "SEC001", "security", "critical", "Possible secret committed", line, "Remove the secret, rotate it, and load it from a secret manager.");
+      addLineFinding(findings, "SEC001", "security", "critical", "Possible secret in code", line, "Remove the secret, rotate it, and read it from a secret manager.");
     }
     if (/\beval\s*\(|new Function\s*\(/.test(text)) {
-      addLineFinding(findings, "SEC002", "security", "critical", "Dynamic code execution added", line, "Avoid dynamic execution or strictly sandbox trusted input.");
+      addLineFinding(findings, "SEC002", "security", "critical", "Code runs dynamically", line, "Avoid running generated code. Use a safer approach.");
     }
     if (/\b(innerHTML|dangerouslySetInnerHTML)\b/.test(text)) {
-      addLineFinding(findings, "SEC003", "security", "high", "Unsafe HTML injection surface added", line, "Use safe rendering APIs or sanitize trusted HTML explicitly.");
+      addLineFinding(findings, "SEC003", "security", "high", "Unsafe HTML may be shown", line, "Use safe rendering, or clean the HTML before showing it.");
     }
     if (/(SELECT|UPDATE|INSERT|DELETE).*(\+|\$\{)/i.test(text)) {
-      addLineFinding(findings, "SEC004", "security", "high", "Possible SQL injection pattern", line, "Use parameterized queries instead of string concatenation.");
+      addLineFinding(findings, "SEC004", "security", "high", "SQL query may be unsafe", line, "Use query parameters instead of joining SQL strings.");
     }
     if (/console\.(log|info|warn|error)\(.*(card|password|token|secret|payload|authorization)/i.test(text)) {
       addLineFinding(findings, "SEC005", "security", "high", "Sensitive data may be logged", line, "Do not log secrets, card data, tokens, or raw request payloads.", {
@@ -608,9 +608,9 @@ function reviewSecurity(story, files, additions, findings) {
       id: "SEC006",
       category: "security",
       severity: "medium",
-      title: "Sensitive area changed without tests",
+      title: "Sensitive code changed without tests",
       details: `Sensitive paths changed: ${sensitivePaths.map(displayPath).slice(0, 6).join(", ")}`,
-      recommendation: "Add tests for authorization, access control, idempotency, or failure handling as appropriate."
+      recommendation: "Add tests for the risky path, such as access checks, retries, or failure handling."
     });
   }
 
@@ -618,7 +618,7 @@ function reviewSecurity(story, files, additions, findings) {
     if (/log|secret|token|card|pii/i.test(expectation)) {
       const riskyLine = additions.find((line) => /console\.|logger\.|log\(/i.test(line.content));
       if (riskyLine) {
-        addLineFinding(findings, "SEC007", "security", "medium", "Security expectation needs manual verification", riskyLine, `Story expectation: ${expectation}`);
+        addLineFinding(findings, "SEC007", "security", "medium", "Security rule needs a closer check", riskyLine, `Jira says: ${expectation}`);
       }
     }
   }
@@ -630,10 +630,10 @@ function reviewPerformance(files, additions, findings) {
   for (const line of additions) {
     const text = line.content;
     if (/SELECT\s+\*/i.test(text)) {
-      addLineFinding(findings, "PERF003", "performance", "medium", "Broad database query added", line, "Select only the columns needed by this flow.");
+      addLineFinding(findings, "PERF003", "performance", "medium", "Database query may fetch too much data", line, "Select only the fields this flow needs.");
     }
     if (/\b(readFileSync|writeFileSync|readdirSync|execSync)\s*\(/.test(text)) {
-      addLineFinding(findings, "PERF004", "performance", "medium", "Synchronous operation added", line, "Avoid blocking operations in request or hot paths.");
+      addLineFinding(findings, "PERF004", "performance", "medium", "This may block the app", line, "Use a non-blocking option in user-facing code.");
     }
   }
 
@@ -643,11 +643,11 @@ function reviewPerformance(files, additions, findings) {
       const nearby = fileLines.filter((line) => line.lineNumber >= loopLine.lineNumber && line.lineNumber <= loopLine.lineNumber + 8);
       const awaitLine = nearby.find((line) => /\bawait\b/.test(line.content));
       if (awaitLine) {
-        addLineFinding(findings, "PERF001", "performance", "high", "Await inside loop risk", awaitLine, "Batch the work, use Promise.all with limits, or document why sequential execution is required.");
+        addLineFinding(findings, "PERF001", "performance", "high", "This waits inside a loop", awaitLine, "Run the work in batches, or explain why each item must run one after another.");
       }
       const nestedLoop = nearby.find((line) => line.lineNumber !== loopLine.lineNumber && /\b(for|while)\s*\(|\.forEach\s*\(/.test(line.content));
       if (nestedLoop) {
-        addLineFinding(findings, "PERF002", "performance", "medium", "Nested loop added", nestedLoop, "Check input sizes and consider indexing or a map-based lookup.");
+        addLineFinding(findings, "PERF002", "performance", "medium", "Loop inside another loop", nestedLoop, "Check how much data this handles. Use a map or lookup if the list can grow.");
       }
     }
   }
@@ -666,9 +666,9 @@ function reviewTestExpectations(story, files, findings) {
       id: "TEST001",
       category: "tests",
       severity: "medium",
-      title: "Story expects tests but no test file changed",
+      title: "Jira asks for tests, but no test changed",
       details: (story.testExpectations ?? []).join(" ") || "Acceptance criteria explicitly mention tests.",
-      recommendation: "Add focused tests or explain in the PR why existing coverage is sufficient."
+      recommendation: "Add the missing test, or explain in the PR why existing tests already cover it."
     });
   }
 }
