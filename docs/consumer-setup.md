@@ -37,6 +37,8 @@ jobs:
       LITELLM_API_KEY: ${{ secrets.LITELLM_API_KEY }}
       JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
       JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      REVIEWIQ_APP_ID: ${{ secrets.REVIEWIQ_APP_ID }}
+      REVIEWIQ_APP_PRIVATE_KEY: ${{ secrets.REVIEWIQ_APP_PRIVATE_KEY }}
     with:
       story-provider: jira
       jira-base-url: https://your-company.atlassian.net
@@ -105,7 +107,18 @@ with:
   llm-required: true
 ```
 
-## 5. Optional Reviewer Bypass
+## 5. Optional ReviewIQ Bot Identity
+
+To make PR comments appear from `ReviewIQ[bot]` with the GitHub App logo instead of `github-actions[bot]`, create and install the ReviewIQ GitHub App, generate a private key, and add these repository or organization secrets:
+
+```text
+REVIEWIQ_APP_ID
+REVIEWIQ_APP_PRIVATE_KEY
+```
+
+Pass those secrets to the reusable workflow as shown above. If the app secrets are missing or the app token cannot be created, ReviewIQ falls back to the default GitHub Actions token so the review still runs.
+
+## 6. Optional Reviewer Bypass
 
 If a human reviewer decides the AI review should not block the PR, add the `reviewiq-ignore` label to the PR or put `[reviewiq ignore]` / `[skip reviewiq]` in the PR body.
 
@@ -116,7 +129,7 @@ with:
   ignore-label: ai-review-ignored
 ```
 
-## 6. Test
+## 7. Test
 
 Open a PR whose branch, title, body, or commit message contains the story ID. The workflow will:
 

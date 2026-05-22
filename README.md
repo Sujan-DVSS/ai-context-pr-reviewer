@@ -136,6 +136,8 @@ jobs:
       JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
       JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
       JIRA_BEARER_TOKEN: ${{ secrets.JIRA_BEARER_TOKEN }}
+      REVIEWIQ_APP_ID: ${{ secrets.REVIEWIQ_APP_ID }}
+      REVIEWIQ_APP_PRIVATE_KEY: ${{ secrets.REVIEWIQ_APP_PRIVATE_KEY }}
     with:
       story-provider: jira
       jira-base-url: https://your-company.atlassian.net
@@ -157,6 +159,13 @@ The workflow uploads `review-dashboard.html` as an artifact with AC coverage per
 ReviewIQ treats `medium`, `high`, and `critical` findings as must-fix issues that should block merging. `Low` findings may still appear as inline suggestions, but they are optional cleanup and should not make the merge check fail.
 
 Reviewers can intentionally skip ReviewIQ by adding the `reviewiq-ignore` label to the PR or by putting `[reviewiq ignore]` or `[skip reviewiq]` in the PR body. The workflow posts a skipped report, clears previous ReviewIQ inline comments when it has permission, and keeps the merge check green. Reusable workflow consumers can rename the label with `ignore-label`.
+
+To show PR comments as `ReviewIQ[bot]` with a custom GitHub App logo, create and install a GitHub App, then add:
+
+- Secret `REVIEWIQ_APP_ID`
+- Secret `REVIEWIQ_APP_PRIVATE_KEY`
+
+If the app secrets are missing or token creation fails, the workflow falls back to the normal `github-actions[bot]` token so ReviewIQ still runs.
 
 To enable LiteLLM in GitHub Actions, add:
 
