@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
 export const SEVERITY_ORDER = {
@@ -219,16 +219,9 @@ function normalizeDiffPath(path) {
   return path.replace(/^[ab]\//, "");
 }
 
-export function loadStory(storyPath) {
-  const raw = readFileSync(storyPath, "utf8");
-  const story = JSON.parse(raw);
-  validateStory(story, storyPath);
-  return story;
-}
-
-export function validateStory(story, source = "story JSON") {
+export function validateStory(story, source = "Jira story") {
   if (!story || typeof story !== "object") {
-    throw new Error(`${source} must contain a JSON object.`);
+    throw new Error(`${source} must contain a story object.`);
   }
   for (const key of ["id", "title", "description"]) {
     if (!story[key] || typeof story[key] !== "string") {
@@ -238,38 +231,6 @@ export function validateStory(story, source = "story JSON") {
   if (!Array.isArray(story.acceptanceCriteria) || story.acceptanceCriteria.length === 0) {
     throw new Error(`${source} must include at least one acceptance criterion.`);
   }
-}
-
-export function resolveStoryPath({ explicitStoryPath, storiesDir = "stories", refs = [] }) {
-  if (explicitStoryPath) {
-    return explicitStoryPath;
-  }
-
-  const ticketIds = extractTicketIds(refs);
-  for (const ticketId of ticketIds) {
-    const candidates = [
-      join(storiesDir, `${ticketId}.json`),
-      join(storiesDir, `${ticketId.toLowerCase()}.json`)
-    ];
-    const match = candidates.find((candidate) => existsSync(candidate));
-    if (match) {
-      return match;
-    }
-  }
-
-  const fallback = join(storiesDir, "sample-story.json");
-  if (existsSync(fallback)) {
-    return fallback;
-  }
-
-  const firstStory = existsSync(storiesDir)
-    ? readdirSync(storiesDir).find((entry) => entry.endsWith(".json"))
-    : undefined;
-  if (firstStory) {
-    return join(storiesDir, firstStory);
-  }
-
-  throw new Error("No story JSON found. Pass --story or add stories/sample-story.json.");
 }
 
 export function extractTicketIds(refs = []) {
@@ -329,9 +290,11 @@ export function runReview({ story, diffText, repoContext, metadata = {} }) {
   const additions = files.flatMap((file) => file.additions);
   const deletions = files.flatMap((file) => file.deletions);
   const findings = [];
+  const storyAlignment = buildStoryAlignment(story, files, additions, repoContext);
   const acceptance = evaluateAcceptanceCriteria(story, files, additions, findings, repoContext);
 
-  reviewTraceability(story, files, additions, acceptance, findings, repoContext);
+  reviewTraceability(story, files, additions, acceptance, findings, repoContext, storyAlignment);
+  reviewCrossStoryConflicts(story, files, additions, findings, metadata);
   reviewStaticQuality(files, additions, findings);
   reviewSecurity(story, files, additions, findings);
   reviewPerformance(files, additions, findings);
@@ -349,6 +312,7 @@ export function runReview({ story, diffText, repoContext, metadata = {} }) {
       changedFiles: files.length,
       additions: additions.length,
       deletions: deletions.length,
+      storyAlignmentScore: storyAlignment.score,
       maxSeverity,
       gate,
       ...metadata
@@ -362,6 +326,7 @@ export function runReview({ story, diffText, repoContext, metadata = {} }) {
         }
       : undefined,
     story,
+    storyAlignment,
     files: files.map((file) => ({
       path: displayPath(file),
       status: file.status,
@@ -435,7 +400,7 @@ function evaluateAcceptanceCriteria(story, files, additions, findings, repoConte
   });
 }
 
-function reviewTraceability(story, files, additions, acceptance, findings, repoContext) {
+function buildStoryAlignment(story, files, additions, repoContext) {
   const storyText = [
     story.title,
     story.description,
@@ -450,9 +415,34 @@ function reviewTraceability(story, files, additions, acceptance, findings, repoC
     ...additions.map((line) => line.content)
   ].join(" ");
   const changedTokens = new Set(tokenize(changedText));
-  const overlap = [...storyTokens].filter((token) => changedTokens.has(token));
+  const overlapTerms = [...storyTokens].filter((token) => changedTokens.has(token));
   const denominator = Math.min(storyTokens.size, 40) || 1;
-  const ratio = overlap.length / denominator;
+  const vocabularyScore = Math.min(100, Math.round((overlapTerms.length / denominator) * 100));
+  const changedPaths = new Set(files.map(displayPath));
+  const topRelevantFiles = repoContext?.relevantFiles?.slice(0, 5) ?? [];
+  const changedRelevantFiles = topRelevantFiles.filter((file) => changedPaths.has(file.path));
+  const repoScore = topRelevantFiles.length === 0
+    ? 100
+    : Math.round((changedRelevantFiles.length / topRelevantFiles.length) * 100);
+  const score = files.length === 0
+    ? 100
+    : Math.round((vocabularyScore * 0.7) + (repoScore * 0.3));
+
+  return {
+    score,
+    vocabularyScore,
+    repoScore,
+    overlapTerms,
+    totalStoryTerms: storyTokens.size,
+    changedRelevantFiles: changedRelevantFiles.map((file) => file.path),
+    topRelevantFiles: topRelevantFiles.map((file) => file.path),
+    summary: `${overlapTerms.length} story terms matched; ${changedRelevantFiles.length}/${topRelevantFiles.length} top repo-context files touched.`
+  };
+}
+
+function reviewTraceability(story, files, additions, acceptance, findings, repoContext, storyAlignment) {
+  const overlap = storyAlignment.overlapTerms;
+  const ratio = storyAlignment.vocabularyScore / 100;
 
   if (files.length > 0 && overlap.length < 2) {
     findings.push({
@@ -537,6 +527,26 @@ function reviewTraceability(story, files, additions, acceptance, findings, repoC
   }
 }
 
+function reviewCrossStoryConflicts(story, files, additions, findings, metadata) {
+  const currentTicketIds = new Set([story.id, metadata.ticketId].filter(Boolean).map((ticketId) => String(ticketId).toUpperCase()));
+  const referencedTicketIds = extractTicketIds([
+    ...files.map(displayPath),
+    ...additions.map((line) => line.content)
+  ]);
+  const otherTicketIds = referencedTicketIds.filter((ticketId) => !currentTicketIds.has(ticketId));
+
+  if (otherTicketIds.length > 0) {
+    findings.push({
+      id: "CROSS001",
+      category: "traceability",
+      severity: "high",
+      title: "PR appears to reference another Jira story",
+      details: `Other Jira IDs found in changed code or paths: ${otherTicketIds.slice(0, 5).join(", ")}`,
+      recommendation: "Move that behavior into the correct story PR, or confirm in Jira that this story intentionally covers those references."
+    });
+  }
+}
+
 function reviewStaticQuality(files, additions, findings) {
   if (files.length > 20) {
     findings.push({
@@ -552,7 +562,9 @@ function reviewStaticQuality(files, additions, findings) {
   for (const line of additions) {
     const text = line.content;
     if (/\b(debugger|console\.log|printStackTrace)\b/.test(text)) {
-      addLineFinding(findings, "STATIC001", "static", "medium", "Debug or console statement added", line, "Remove debug output or replace it with structured, safe logging.");
+      addLineFinding(findings, "STATIC001", "static", "medium", "Debug or console statement added", line, "Remove debug output or replace it with structured, safe logging.", {
+        suggestedReplacement: ""
+      });
     }
     if (/\b(TODO|FIXME|HACK)\b/i.test(text)) {
       addLineFinding(findings, "STATIC002", "static", "low", "Unresolved marker added", line, "Resolve the marker before merge or link it to a tracked follow-up.");
@@ -585,7 +597,9 @@ function reviewSecurity(story, files, additions, findings) {
       addLineFinding(findings, "SEC004", "security", "high", "Possible SQL injection pattern", line, "Use parameterized queries instead of string concatenation.");
     }
     if (/console\.(log|info|warn|error)\(.*(card|password|token|secret|payload|authorization)/i.test(text)) {
-      addLineFinding(findings, "SEC005", "security", "high", "Sensitive data may be logged", line, "Do not log secrets, card data, tokens, or raw request payloads.");
+      addLineFinding(findings, "SEC005", "security", "high", "Sensitive data may be logged", line, "Do not log secrets, card data, tokens, or raw request payloads.", {
+        suggestedReplacement: ""
+      });
     }
   }
 
@@ -673,6 +687,8 @@ export function renderMarkdownReport(report) {
     `**Story:** ${report.metadata.storyId} - ${report.metadata.storyTitle}`,
     "",
     `**Diff size:** ${report.metadata.changedFiles} files, +${report.metadata.additions}/-${report.metadata.deletions}`,
+    "",
+    `**Story Alignment:** ${report.metadata.storyAlignmentScore}% - ${report.storyAlignment.summary}`,
     "",
     ...(report.repoContext
       ? [
@@ -781,12 +797,90 @@ export function renderMarkdownReport(report) {
   return lines.join("\n");
 }
 
-export function writeReports(report, { markdownPath, jsonPath }) {
+export function renderHtmlDashboard(report) {
+  const acCoverage = acceptanceCoveragePercent(report);
+  const severityCards = ["critical", "high", "medium", "low"].map((severity) => `
+      <div class="card">
+        <span class="label">${escapeHtml(severity.toUpperCase())}</span>
+        <strong>${report.findingCounts[severity] ?? 0}</strong>
+      </div>`).join("");
+  const changedPaths = new Set(report.files.map((file) => file.path));
+  const relevantFiles = report.repoContext?.relevantFiles ?? [];
+  const touchedRelevant = relevantFiles.filter((file) => changedPaths.has(file.path));
+  const llmStatus = report.metadata.llmStatus === "completed"
+    ? `Completed (${report.metadata.llmModel ?? "model unknown"})`
+    : report.metadata.llmStatus === "failed"
+      ? `Failed: ${report.metadata.llmError ?? "unknown error"}`
+      : "Not run";
+  const recommendation = report.metadata.gate === "fail"
+    ? "Do not merge until medium/high/critical findings are resolved."
+    : report.metadata.gate === "warn"
+      ? "Merge is allowed, but review low-severity suggestions first."
+      : "No ReviewIQ blockers found.";
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ReviewIQ Dashboard</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 32px; color: #172033; background: #f7f8fb; }
+    h1 { margin-bottom: 4px; }
+    .muted { color: #5f6b7a; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; margin: 24px 0; }
+    .card { background: #fff; border: 1px solid #dde3ee; border-radius: 12px; padding: 18px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04); }
+    .card strong { display: block; font-size: 30px; margin-top: 8px; }
+    .label { color: #5f6b7a; font-size: 12px; font-weight: 700; letter-spacing: .08em; }
+    .fail { color: #b42318; }
+    .pass { color: #027a48; }
+    table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #dde3ee; border-radius: 12px; overflow: hidden; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #edf1f7; }
+    th { background: #eef2ff; }
+  </style>
+</head>
+<body>
+  <h1>ReviewIQ Dashboard</h1>
+  <p class="muted">${escapeHtml(report.metadata.storyId)} - ${escapeHtml(report.metadata.storyTitle)}</p>
+  <div class="grid">
+    <div class="card"><span class="label">AC COVERAGE</span><strong>${acCoverage}%</strong></div>
+    <div class="card"><span class="label">STORY ALIGNMENT</span><strong>${report.metadata.storyAlignmentScore}%</strong></div>
+    <div class="card"><span class="label">MERGE RECOMMENDATION</span><strong class="${report.metadata.gate === "fail" ? "fail" : "pass"}">${escapeHtml(report.metadata.gate.toUpperCase())}</strong></div>
+    <div class="card"><span class="label">CHANGED VS RELEVANT</span><strong>${touchedRelevant.length}/${relevantFiles.length}</strong><p class="muted">Top repo-context files touched</p></div>
+  </div>
+  <h2>Severity Count</h2>
+  <div class="grid">${severityCards}</div>
+  <h2>LLM Result</h2>
+  <div class="card">${escapeHtml(llmStatus)}</div>
+  <h2>Merge Recommendation</h2>
+  <div class="card">${escapeHtml(recommendation)}</div>
+  <h2>Acceptance Criteria</h2>
+  <table>
+    <thead><tr><th>AC</th><th>Status</th><th>Evidence</th></tr></thead>
+    <tbody>
+      ${report.acceptanceCriteria.map((criterion) => {
+        const evidence = [
+          ...criterion.evidence.paths.map((pathEvidence) => `path ${pathEvidence.file}`),
+          ...criterion.evidence.lines.map((line) => `${line.file}:${line.line}`),
+          ...criterion.evidence.repo.map((repoEvidence) => `repo ${repoEvidence.file}`)
+        ].slice(0, 4).join("; ") || "No clear diff evidence";
+        return `<tr><td>${escapeHtml(criterion.id)}</td><td>${escapeHtml(criterion.status)}</td><td>${escapeHtml(evidence)}</td></tr>`;
+      }).join("")}
+    </tbody>
+  </table>
+</body>
+</html>
+`;
+}
+
+export function writeReports(report, { markdownPath, jsonPath, htmlPath }) {
   if (markdownPath) {
     writeFileSync(markdownPath, renderMarkdownReport(report));
   }
   if (jsonPath) {
     writeFileSync(jsonPath, `${JSON.stringify(report, null, 2)}\n`);
+  }
+  if (htmlPath) {
+    writeFileSync(htmlPath, renderHtmlDashboard(report));
   }
 }
 
@@ -975,6 +1069,7 @@ function countOccurrences(text, term) {
 function shouldIgnoreFile(path) {
   return path === "review-report.md"
     || path === "review-report.json"
+    || path === "review-dashboard.html"
     || path === "pr.diff"
     || path.endsWith(".lock");
 }
@@ -988,7 +1083,7 @@ function toPosix(path) {
   return path.split("\\").join("/");
 }
 
-function addLineFinding(findings, id, category, severity, title, line, recommendation) {
+function addLineFinding(findings, id, category, severity, title, line, recommendation, options = {}) {
   findings.push({
     id,
     category,
@@ -997,7 +1092,10 @@ function addLineFinding(findings, id, category, severity, title, line, recommend
     file: line.file,
     line: line.lineNumber,
     details: line.content.trim(),
-    recommendation
+    recommendation,
+    ...(Object.hasOwn(options, "suggestedReplacement")
+      ? { suggestedReplacement: options.suggestedReplacement }
+      : {})
   });
 }
 
@@ -1094,4 +1192,22 @@ function unique(items) {
 
 function escapeTable(value) {
   return String(value).replace(/\|/g, "\\|");
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function acceptanceCoveragePercent(report) {
+  const criteria = report.acceptanceCriteria ?? [];
+  if (criteria.length === 0) {
+    return 100;
+  }
+  const covered = criteria.filter((criterion) => criterion.status === "covered").length;
+  return Math.round((covered / criteria.length) * 100);
 }

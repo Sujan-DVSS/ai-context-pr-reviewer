@@ -1,8 +1,8 @@
 # ReviewIQ
 
-Hackathon MVP for an AI context-aware code peer review bot. ReviewIQ runs when a pull request is opened or updated, reads the PR diff, scans the repository for story-relevant implementation context, reads the related user story from JSON or Jira, and produces a review that connects implementation evidence back to the story description and acceptance criteria.
+Hackathon MVP for an AI context-aware code peer review bot. ReviewIQ runs when a pull request is opened or updated, reads the PR diff, scans the repository for story-relevant implementation context, pulls the related user story from Jira, and produces a review that connects implementation evidence back to the story description and acceptance criteria.
 
-The MVP is intentionally dependency-light and can run without API keys. JSON is the fallback story provider today; Jira REST can pull live issue details when configured. If a LiteLLM gateway is configured, the reviewer also runs an LLM semantic pass.
+The MVP is intentionally dependency-light, but story context is Jira-only. Jira REST pulls live issue details, including acceptance criteria from a custom field when configured. If a LiteLLM gateway is configured, the reviewer also runs an LLM semantic pass.
 
 ## What It Reviews
 
@@ -12,6 +12,8 @@ The MVP is intentionally dependency-light and can run without API keys. JSON is 
 - Product context: whether changed files and added code line up with the story description, acceptance criteria, constraints, out-of-scope notes, and expected tests.
 - Traceability: an acceptance-criteria evidence matrix showing which ACs appear supported by the diff and which need reviewer attention.
 - Repo context: scans unchanged repository files to identify the modules most likely related to the story, then checks whether the PR touched the expected implementation areas.
+- Story alignment score: reports a percentage score based on Jira vocabulary overlap and whether the PR touches story-relevant repo files.
+- Cross-story conflict detection: flags changed code that references another Jira ID or touches out-of-scope story areas.
 - LLM semantic review: optional LiteLLM pass for AC fit, missing edge cases, reviewer questions, and suggested tests.
 
 ## Differentiator
@@ -24,36 +26,32 @@ Most review bots focus on generic code smells. This MVP also reviews requirement
 - Which changed files look unrelated to the story?
 - Did the PR skip required tests, migration notes, security expectations, or performance expectations?
 - Is the blast radius bigger than the story scope?
+- Is the PR accidentally changing behavior for another Jira story?
 
 That is the under-addressed pain point: teams often discover late that code is clean but solves the wrong problem, misses an acceptance criterion, or quietly changes behavior outside the story.
 
 ## Quick Start
 
-```bash
-npm run sample
-```
-
-This writes:
-
-- `review-report.md` for a PR comment.
-- `review-report.json` for automation and dashboards.
-
-Run against a real PR diff:
+Run against a real PR diff and Jira ticket:
 
 ```bash
 git diff --unified=80 origin/main...HEAD > pr.diff
-node src/index.js --story stories/sample-story.json --diff pr.diff --repo-root . --out review-report.md --json review-report.json --fail-on medium
+export JIRA_BASE_URL="https://your-company.atlassian.net"
+export JIRA_EMAIL="you@company.com"
+export JIRA_API_TOKEN="..."
+
+node src/index.js --ticket-id STRY-123 --diff pr.diff --repo-root . --out review-report.md --json review-report.json --fail-on medium
 ```
 
 Disable repository scanning if you only want a diff-level review:
 
 ```bash
-node src/index.js --story stories/sample-story.json --diff pr.diff --no-repo-context
+node src/index.js --ticket-id STRY-123 --diff pr.diff --no-repo-context
 ```
 
 ## Jira Integration
 
-For GitHub Actions, Jira is integrated through REST so the workflow can run independently of Cursor. The reviewer extracts a ticket ID such as `STRY-123` from the branch name, PR title, PR body, or commit messages, then fetches that Jira issue and converts it into the same internal story contract used by JSON.
+For GitHub Actions, Jira is integrated through REST so the workflow can run independently of Cursor. The reviewer extracts a ticket ID such as `STRY-123` from the branch name, PR title, PR body, or commit messages, then fetches that Jira issue and converts it into ReviewIQ's internal story contract.
 
 ```bash
 export JIRA_BASE_URL="https://your-company.atlassian.net"
@@ -80,17 +78,17 @@ If acceptance criteria live in a Jira custom field, set:
 export JIRA_AC_FIELD="customfield_12345"
 ```
 
-`--story-provider auto` uses Jira when Jira credentials are present and falls back to JSON otherwise. Jira MCP can still be used inside Cursor for manual lookup or validation, but GitHub Actions should use the REST provider because MCP servers are not available in the GitHub runner by default.
+Jira is required. Jira MCP can still be used inside Cursor for manual lookup or validation, but GitHub Actions should use the REST provider because MCP servers are not available in the GitHub runner by default.
 
 ## LiteLLM Integration
 
-LiteLLM is supported through its OpenAI-compatible `/v1/chat/completions` API. The deterministic checks still run first; LiteLLM receives only the story JSON, compact PR diff, deterministic findings, and top retrieved repo-context snippets.
+LiteLLM is supported through its OpenAI-compatible `/v1/chat/completions` API. The deterministic checks still run first; LiteLLM receives only the Jira story context, compact PR diff, deterministic findings, and top retrieved repo-context snippets.
 
 ```bash
 export LITELLM_API_KEY="..."
 
 node src/index.js \
-  --story stories/sample-story.json \
+  --ticket-id STRY-123 \
   --diff pr.diff \
   --repo-root . \
   --llm-provider litellm
@@ -109,30 +107,6 @@ Use `--llm-provider auto` in CI to run the LLM only when `LITELLM_BASE_URL`, `LI
 If the gateway is configured but temporarily fails, the GitHub Action still writes the deterministic report and marks the LiteLLM section as failed. Add `--llm-required` if you want the workflow to fail when the LLM semantic pass cannot complete.
 
 If LLM review is mandatory and the LiteLLM gateway returns `403 Forbidden` from GitHub Actions, the most common cause is that the gateway blocks GitHub-hosted runner IPs. Use the reusable workflow input `runner-label: self-hosted` with a runner inside the allowed network, or ask the gateway owner to allow GitHub Actions runner egress.
-
-## Story JSON Contract
-
-```json
-{
-  "id": "PAY-123",
-  "title": "Add idempotency for payment retries",
-  "description": "Customers should not be double charged when checkout retry requests are sent.",
-  "acceptanceCriteria": [
-    {
-      "id": "AC1",
-      "text": "Requests with the same Idempotency-Key return the original payment result.",
-      "keywords": ["idempotency", "Idempotency-Key", "original payment result"],
-      "mustTouch": ["src/payments/**"],
-      "risk": "critical"
-    }
-  ],
-  "technicalConstraints": ["Do not store raw card data."],
-  "securityExpectations": ["No secrets or card data should be logged."],
-  "performanceExpectations": ["Idempotency lookup should not add more than one database query."],
-  "testExpectations": ["Add retry tests for duplicate payment requests."],
-  "outOfScope": ["Refund flow"]
-}
-```
 
 ## GitHub Actions
 
@@ -163,22 +137,22 @@ jobs:
       JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
       JIRA_BEARER_TOKEN: ${{ secrets.JIRA_BEARER_TOKEN }}
     with:
-      story-provider: auto
+      story-provider: jira
       jira-base-url: https://your-company.atlassian.net
       fail-on: medium
       llm-provider: litellm
       llm-required: true
 ```
 
-For the hackathon, you can either configure Jira or keep a story file in `stories/<ticket-id>.json` and include the ticket ID in the branch name, PR title, PR body, or commit messages. If Jira is not configured and there is no exact JSON match, the sample story is used as a fallback so the workflow still demonstrates end-to-end behavior.
-
-Examples that resolve to `stories/STRY-123.json`:
+Include the Jira ticket ID in the branch name, PR title, PR body, or commit messages so ReviewIQ knows which Jira issue to pull.
 
 - Branch: `STRY-123-change-feature-logic`
 - PR title: `STRY-123 change feature logic`
 - Commit message: `STRY-123 update feature eligibility`
 
 In GitHub Actions, `--repo-root .` lets the reviewer use the entire checked-out repository as context. It indexes a bounded number of text files, skips heavy generated folders such as `.git`, `node_modules`, `dist`, and `build`, and reports the top story-relevant files in the PR comment.
+
+The workflow uploads `review-dashboard.html` as an artifact with AC coverage percentage, severity counts, changed files vs relevant repo files, LiteLLM status, story alignment score, and merge recommendation.
 
 ReviewIQ treats `medium`, `high`, and `critical` findings as must-fix issues that should block merging. `Low` findings may still appear as inline suggestions, but they are optional cleanup and should not make the merge check fail.
 
@@ -203,7 +177,7 @@ And set workflow input `jira-base-url`. Optionally set `jira-ac-field` if ACs ar
 
 ## Future Integrations
 
-- Jira/Linear/GitHub Issues story provider.
+- Linear/GitHub Issues story providers.
 - More LLM providers and model-specific prompt packs.
 - Repository-specific policy packs.
 - Inline review comments on exact diff lines.

@@ -9,8 +9,6 @@
   },
   "scripts": {
     "review": "node src/index.js",
-    "sample": "node src/index.js --story stories/sample-story.json --diff test/fixtures/sample.diff --repo-root test/fixtures/repo --out review-report.md --json review-report.json",
-    "sample:llm": "node src/index.js --story stories/sample-story.json --diff test/fixtures/sample.diff --repo-root test/fixtures/repo --llm-provider litellm --out review-report.md --json review-report.json",
     "test": "node --test test/core.test.js"
   },
   "engines": {

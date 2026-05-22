@@ -4,13 +4,7 @@ Use this when you want another repository to run the central ReviewIQ reviewer w
 
 ## 1. Connect Story Context
 
-Option A: use Jira. The reusable workflow can pull the story directly from Jira when a PR references a ticket ID.
-
-Option B: use JSON. Create a story file in the application repository:
-
-```text
-stories/STRY-123.json
-```
+ReviewIQ is Jira-only for story context. The reusable workflow pulls the story directly from Jira when a PR references a ticket ID.
 
 The PR can reference the story ID in the branch name, PR title, PR body, or commit message:
 
@@ -44,8 +38,7 @@ jobs:
       JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
       JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
     with:
-      story-provider: auto
-      stories-dir: stories
+      story-provider: jira
       jira-base-url: https://your-company.atlassian.net
       fail-on: medium
       llm-provider: litellm
@@ -74,7 +67,7 @@ with:
   jira-ac-field: customfield_12345
 ```
 
-When `story-provider: auto`, Jira is used if credentials are present. Otherwise, the workflow falls back to `stories/<ticket-id>.json`.
+Jira configuration is required. If ReviewIQ cannot find the ticket ID or cannot load the Jira issue, the workflow fails instead of falling back to local JSON.
 
 Jira MCP can be used inside Cursor for manual issue lookup, but GitHub Actions uses Jira REST because the MCP server is not present on GitHub-hosted runners by default.
 
@@ -117,10 +110,13 @@ with:
 Open a PR whose branch, title, body, or commit message contains the story ID. The workflow will:
 
 - Generate the PR diff.
-- Load Jira issue details when Jira is configured, otherwise load `stories/<ticket-id>.json`.
+- Load Jira issue details.
 - Scan the repository for relevant context.
 - Run static, security, performance, and traceability checks.
 - Run LiteLLM semantic analysis when the key is configured.
 - Post or update a PR comment.
 - Post plain-English inline review comments for findings that map to changed PR lines.
+- Include GitHub suggestion blocks for safe single-line fixes.
+- Upload `review-dashboard.html` with AC coverage, severity count, changed-vs-relevant files, LLM result, story alignment score, and merge recommendation.
+- Flag cross-story conflicts when changed code references a different Jira ID or an out-of-scope story area.
 - Fail the merge check for `medium`, `high`, and `critical` findings. `Low` findings can appear as optional inline suggestions without blocking the PR.

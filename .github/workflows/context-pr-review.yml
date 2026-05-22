@@ -73,13 +73,13 @@ jobs:
 
           node src/index.js \
             --diff pr.diff \
-            --story-provider auto \
-            --stories-dir stories \
+            --story-provider jira \
             --repo-root . \
             --max-context-files 700 \
             --llm-provider auto \
             --out review-report.md \
             --json review-report.json \
+            --html review-dashboard.html \
             --fail-on medium
 
       - name: Upload review artifacts
@@ -91,6 +91,7 @@ jobs:
             pr.diff
             review-report.md
             review-report.json
+            review-dashboard.html
 
       - name: Post or update PR comment
         if: always() && github.event.pull_request.head.repo.full_name == github.repository
@@ -148,8 +149,9 @@ jobs:
             for (const finding of report.findings ?? []) {
               if (!finding.file || shouldSkipInlineFinding(finding)) continue;
               const exactKey = Number.isInteger(finding.line) ? `${finding.file}:${finding.line}` : "";
+              const exactLineMatch = changedLines.has(exactKey);
               const fallbackLine = fallbackLines.get(finding.file);
-              const line = changedLines.has(exactKey) ? finding.line : fallbackLine;
+              const line = exactLineMatch ? finding.line : fallbackLine;
               if (!line) continue;
               const key = `${finding.file}:${line}`;
               if (seen.has(key)) continue;
@@ -158,7 +160,7 @@ jobs:
                 path: finding.file,
                 line,
                 side: "RIGHT",
-                body: buildInlineBody(finding, comments.length + 1, line)
+                body: buildInlineBody(finding, comments.length + 1, line, exactLineMatch)
               });
               if (comments.length >= 20) break;
             }
@@ -182,7 +184,7 @@ jobs:
               const text = String(value ?? "").trim();
               return /^(\/\/|\/\*|\*|#|<!--|--|;)/.test(text);
             }
-            function buildInlineBody(finding, sequence, reviewLine) {
+            function buildInlineBody(finding, sequence, reviewLine, exactLineMatch) {
               const severity = String(finding.severity ?? "low").toLowerCase();
               const title = plainTitle(finding);
               const observation = sentence(finding.details) || plainDetails(finding);
@@ -215,6 +217,7 @@ jobs:
                 "",
                 "**Suggested fix:**",
                 recommendation,
+                suggestionBlock(finding, exactLineMatch),
                 "",
                 `**Acceptance Criteria reference:** ${acReference}`,
                 "",
@@ -222,6 +225,18 @@ jobs:
                 `**Reviewed at:** ${reviewedAt}`,
                 "**Status:** Open"
               ].filter(Boolean).join("\n");
+            }
+            function suggestionBlock(finding, exactLineMatch) {
+              if (!exactLineMatch || typeof finding.suggestedReplacement !== "string") {
+                return "";
+              }
+              const replacement = finding.suggestedReplacement.replace(/```/g, "'''");
+              return [
+                "**Suggested code change:**",
+                "```suggestion",
+                replacement,
+                "```"
+              ].join("\n");
             }
             function sanitizeReviewId(value) {
               return String(value ?? "UNKNOWN").replace(/[^A-Za-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "UNKNOWN";

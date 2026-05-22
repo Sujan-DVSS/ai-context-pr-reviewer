@@ -39,6 +39,7 @@ export async function runLiteLlmSemanticReview({ story, diffText, repoContext, d
             "Write titles, details, and recommendations in plain English that a product owner or junior engineer can understand.",
             "Use medium, high, or critical only when the PR should be fixed before merge. Use low for optional cleanup.",
             "Do not treat explanatory code comments, TODO notes, or wording-only comments as bugs unless they hide a real functional, security, or requirement issue.",
+            "Include suggestedReplacement only when you are confident a single-line GitHub suggestion would be safe to apply.",
             "Do not require tests unless the story, acceptance criteria, or explicit test expectations mention tests or coverage."
           ].join(" ")
         },
@@ -112,7 +113,8 @@ function buildReviewPayload({ story, diffText, repoContext, deterministicReport 
           details: "specific evidence",
           recommendation: "actionable recommendation",
           file: "optional file path",
-          line: "optional line number"
+          line: "optional line number",
+          suggestedReplacement: "optional full replacement text for the commented line only"
         }
       ],
       suggestedTests: ["test idea"],
@@ -169,7 +171,8 @@ function normalizeLlmReview(review, metadata) {
       file: typeof finding.file === "string" ? finding.file : undefined,
       line: Number.isInteger(finding.line) ? finding.line : undefined,
       details: stringOrDefault(finding.details, "No details provided."),
-      recommendation: stringOrDefault(finding.recommendation, "Review manually.")
+      recommendation: stringOrDefault(finding.recommendation, "Review manually."),
+      suggestedReplacement: typeof finding.suggestedReplacement === "string" ? finding.suggestedReplacement : undefined
     })),
     suggestedTests: Array.isArray(review.suggestedTests) ? review.suggestedTests.filter((item) => typeof item === "string") : [],
     reviewerQuestions: Array.isArray(review.reviewerQuestions) ? review.reviewerQuestions.filter((item) => typeof item === "string") : []

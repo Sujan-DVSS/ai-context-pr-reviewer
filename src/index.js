@@ -4,11 +4,9 @@ import { execFileSync } from "node:child_process";
 import {
   buildRepoContext,
   extractTicketIds,
-  loadStory,
   markLlmFailure,
   mergeLlmReview,
   renderMarkdownReport,
-  resolveStoryPath,
   runReview,
   shouldFail,
   writeReports
@@ -46,7 +44,6 @@ async function main() {
     diffText,
     repoContext,
     metadata: {
-      storyPath: storyContext.storyPath,
       storyProvider: storyContext.provider,
       ticketId: storyContext.ticketId,
       repoRoot: repoContext?.rootDir,
@@ -74,13 +71,15 @@ async function main() {
 
   const markdownPath = args.out ?? "review-report.md";
   const jsonPath = args.json ?? "review-report.json";
-  writeReports(report, { markdownPath, jsonPath });
+  const htmlPath = args.html ?? "review-dashboard.html";
+  writeReports(report, { markdownPath, jsonPath, htmlPath });
 
   if (args.stdout) {
     process.stdout.write(renderMarkdownReport(report));
   } else {
     console.log(`Review complete: ${markdownPath}`);
     console.log(`Machine-readable report: ${jsonPath}`);
+    console.log(`Dashboard: ${htmlPath}`);
     console.log(`Gate: ${report.metadata.gate}, max severity: ${report.metadata.maxSeverity}, findings: ${report.findings.length}`);
   }
 
@@ -95,42 +94,23 @@ async function main() {
 }
 
 async function loadStoryContext(args, refs) {
-  const provider = args["story-provider"] ?? process.env.STORY_PROVIDER ?? "auto";
+  const provider = args["story-provider"] ?? process.env.STORY_PROVIDER ?? "jira";
   const ticketId = args["ticket-id"] ?? extractTicketIds(refs)[0];
-  const storiesDir = args["stories-dir"] ?? "stories";
 
-  if (provider === "jira" || (provider === "auto" && hasJiraConfig(args))) {
-    if (!ticketId) {
-      if (provider === "jira") {
-        throw new Error("No ticket ID found for Jira lookup. Include STRY-123-style ID in branch, title, body, commit, or pass --ticket-id.");
-      }
-    } else {
-      try {
-        const story = await loadJiraStory(ticketId, { args });
-        return {
-          story,
-          provider: "jira",
-          ticketId
-        };
-      } catch (error) {
-        if (provider === "jira") {
-          throw error;
-        }
-        console.warn(`Jira story lookup failed, falling back to JSON: ${error instanceof Error ? error.message : error}`);
-      }
-    }
+  if (provider !== "jira" && provider !== "auto") {
+    throw new Error("ReviewIQ is configured for Jira-only story context. Use --story-provider jira.");
   }
-
-  const storyPath = resolveStoryPath({
-    explicitStoryPath: args.story,
-    storiesDir,
-    refs
-  });
+  if (!hasJiraConfig(args)) {
+    throw new Error("Jira configuration is required. Set JIRA_BASE_URL and JIRA_EMAIL/JIRA_API_TOKEN or JIRA_BEARER_TOKEN.");
+  }
+  if (!ticketId) {
+    throw new Error("No ticket ID found for Jira lookup. Include STRY-123-style ID in branch, title, body, commit, or pass --ticket-id.");
+  }
+  const story = await loadJiraStory(ticketId, { args });
   return {
-    story: loadStory(storyPath),
-    storyPath,
-    provider: "json",
-    ticketId: ticketId ?? undefined
+    story,
+    provider: "jira",
+    ticketId
   };
 }
 
@@ -175,13 +155,11 @@ function printHelp() {
   console.log(`ReviewIQ
 
 Usage:
-  node src/index.js --story stories/ABC-123.json --diff pr.diff
+  node src/index.js --story-provider jira --ticket-id ABC-123 --diff pr.diff
 
 Options:
-  --story <path>        Story JSON file. If omitted, tries ticket IDs from PR metadata.
-  --story-provider      auto, json, or jira. Default: auto.
+  --story-provider      jira or auto. Default: jira. Story context is always loaded from Jira.
   --ticket-id           Explicit story/ticket ID, e.g. STRY-123.
-  --stories-dir <dir>   Directory containing story JSON files. Default: stories.
   --jira-base-url       Jira base URL. Can also use JIRA_BASE_URL.
   --jira-email          Jira email for basic auth. Can also use JIRA_EMAIL.
   --jira-api-token      Jira API token for basic auth. Can also use JIRA_API_TOKEN.
@@ -202,6 +180,7 @@ Options:
   --llm-required        Fail the workflow if LiteLLM is configured but the semantic review fails.
   --out <path>          Markdown report path. Default: review-report.md.
   --json <path>         JSON report path. Default: review-report.json.
+  --html <path>         HTML dashboard path. Default: review-dashboard.html.
   --fail-on <severity>  none, low, medium, high, or critical.
   --ref <text>          Extra text used to discover ticket IDs.
   --stdout             Print markdown report to stdout too.

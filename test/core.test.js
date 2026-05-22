@@ -10,7 +10,6 @@ import {
   mergeLlmReview,
   parseUnifiedDiff,
   renderMarkdownReport,
-  resolveStoryPath,
   runReview,
   shouldFail
 } from "../src/core.js";
@@ -48,6 +47,7 @@ test("renderMarkdownReport includes the AC evidence matrix", () => {
   const markdown = renderMarkdownReport(report);
 
   assert.match(markdown, /Acceptance Criteria Evidence/);
+  assert.match(markdown, /Story Alignment/);
   assert.match(markdown, /Repo Context/);
   assert.match(markdown, /AC1/);
   assert.match(markdown, /ReviewIQ/);
@@ -72,20 +72,6 @@ test("buildRepoContext ignores the checked-out reviewer engine folder", () => {
 
   assert.equal(repoContext.relevantFiles.some((file) => file.path.startsWith(".ai-context-pr-reviewer/")), false);
   assert.ok(repoContext.relevantFiles.some((file) => file.path === "src/services/PaymentService.ts"));
-});
-
-test("resolveStoryPath extracts ticket IDs from commit-style refs case-insensitively", () => {
-  const root = mkdtempSync(join(tmpdir(), "context-reviewer-"));
-  const storiesDir = join(root, "stories");
-  mkdirSync(storiesDir);
-  writeFileSync(join(storiesDir, "STRY-123.json"), JSON.stringify(sampleStory));
-
-  const storyPath = resolveStoryPath({
-    storiesDir,
-    refs: ["fix feature logic", "commit: stry-123 update eligibility checks"]
-  });
-
-  assert.equal(storyPath, join(storiesDir, "STRY-123.json"));
 });
 
 test("extractTicketIds returns unique uppercase Jira-style IDs", () => {
@@ -202,7 +188,14 @@ test("low severity findings warn but do not block medium gate", () => {
     id: "DOC-1",
     title: "Add TODO readme note",
     description: "Add a TODO readme note for reviewers.",
-    acceptanceCriteria: []
+    acceptanceCriteria: [
+      {
+        id: "AC1",
+        text: "TODO readme note is added.",
+        keywords: ["TODO", "readme"],
+        risk: "low"
+      }
+    ]
   };
   const diffText = [
     "diff --git a/README.md b/README.md",

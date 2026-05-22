@@ -19,26 +19,27 @@ Build a PR-triggered reviewer that combines code-diff review with story-aware va
 Today:
 
 - PR diff comes from `git diff`.
-- Story context comes from JSON.
+- Story context comes from Jira.
 - Review is deterministic and explainable.
 - Output is Markdown for PR comments and JSON for automation.
 
 Later:
 
-- Story context can come from Jira, Linear, GitHub Issues, Confluence, or any internal tool.
+- Story context can also come from Linear, GitHub Issues, Confluence, or any internal tool.
 - The deterministic engine can be paired with an LLM agent for deeper semantic review.
 
 ## Workflow
 
 1. Pull request is opened, synchronized, or reopened.
 2. GitHub Actions checks out the branch.
-3. Workflow finds the story JSON using ticket ID from branch, PR title, PR body, or commit messages.
+3. Workflow finds the Jira ticket ID from branch, PR title, PR body, or commit messages.
 4. Workflow generates a unified diff.
 5. Reviewer builds bounded repository context by scanning text files and ranking modules against story and AC terms.
 6. Reviewer runs a set of specialized review agents:
    - Story alignment agent
    - Acceptance criteria agent
    - Repository context agent
+   - Cross-story conflict agent
    - Static quality agent
    - Security agent
    - Performance agent
@@ -48,6 +49,8 @@ Later:
    - Risk level
    - Findings by category
    - AC evidence matrix
+   - Story alignment score
+   - HTML reviewer dashboard
    - Top story-relevant repository files
    - Suggested reviewer questions
 8. Workflow posts or updates a PR comment.
@@ -67,9 +70,9 @@ Examples:
 
 ## Hackathon Demo Script
 
-1. Show a story JSON file with description, ACs, risks, constraints, and expected tests.
+1. Show a Jira story with description, ACs, risks, constraints, and expected tests.
 2. Show a sample PR diff with a few intentional issues.
-3. Run `npm run sample`.
+3. Run ReviewIQ against a PR that references the Jira ticket.
 4. Open `review-report.md`.
 5. Point out:
    - Findings across static/security/performance.
