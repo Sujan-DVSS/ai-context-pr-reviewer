@@ -197,7 +197,7 @@ jobs:
               const reviewId = `CR-${sanitizeReviewId(storyRef)}-${String(sequence).padStart(3, "0")}`;
               const acReference = acceptanceReference(finding, storyRef);
               const functionName = methodName(finding);
-              const expected = expectedBehaviour(finding);
+              const expected = specificExpected(finding);
               const location = [
                 `**Jira / AC:** ${acReference}`,
                 `**File:** \`${finding.file}\``,
@@ -215,9 +215,7 @@ jobs:
                 "",
                 "**Problem**",
                 observation,
-                "",
-                "**Expected**",
-                expected,
+                ...(expected ? ["", "**Expected**", expected] : []),
                 "",
                 "**Fix**",
                 recommendation,
@@ -282,6 +280,21 @@ jobs:
                 return "If Jira asks for tests, the PR should include them.";
               }
               return "The code should match the Jira story and ACs.";
+            }
+            function specificExpected(finding) {
+              const text = [finding.title, finding.details, finding.recommendation].filter(Boolean).join(" ");
+              const acMatch = text.match(/AC\s*#?\s*(\d+)[^.!?]*(?:should|must|requires?|expected|not|when|if)[^.!?]*/i);
+              if (acMatch) {
+                return sentence(acMatch[0]);
+              }
+              const quoted = text.match(/["“]([^"”]{20,180})["”]/);
+              if (quoted) {
+                return sentence(quoted[1]);
+              }
+              if (finding.category === "security" || finding.category === "performance" || finding.category === "tests") {
+                return expectedBehaviour(finding);
+              }
+              return "";
             }
             function acceptanceReference(finding, storyRef) {
               const text = [finding.title, finding.details, finding.recommendation].filter(Boolean).join(" ");
