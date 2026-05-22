@@ -291,6 +291,7 @@ export function runReview({ story, diffText, repoContext, metadata = {} }) {
   const deletions = files.flatMap((file) => file.deletions);
   const findings = [];
   const storyAlignment = buildStoryAlignment(story, files, additions, repoContext);
+  reviewJiraClarity(story, findings);
   const acceptance = evaluateAcceptanceCriteria(story, files, additions, findings, repoContext);
 
   reviewTraceability(story, files, additions, acceptance, findings, repoContext, storyAlignment);
@@ -397,6 +398,42 @@ function evaluateAcceptanceCriteria(story, files, additions, findings, repoConte
         repo: repoEvidence.slice(0, 4)
       }
     };
+  });
+}
+
+function reviewJiraClarity(story, findings) {
+  const issues = [];
+  const criteria = story.acceptanceCriteria ?? [];
+
+  if (tokenize(story.description ?? "").length < 5) {
+    issues.push("The Jira description is too short to explain the expected behavior.");
+  }
+
+  for (const criterion of criteria) {
+    const text = String(criterion.text ?? "").trim();
+    if (isGenericFallbackCriterion(text)) {
+      issues.push(`${criterion.id ?? "AC"} is missing. Jira did not provide a clear acceptance criterion.`);
+      continue;
+    }
+    if (isVagueCriterion(text)) {
+      issues.push(`${criterion.id ?? "AC"} is vague: "${shortenText(text, 140)}"`);
+    }
+  }
+
+  const conflicts = findConflictingCriteria(criteria);
+  issues.push(...conflicts);
+
+  if (issues.length === 0) {
+    return;
+  }
+
+  findings.push({
+    id: "JIRA001",
+    category: "traceability",
+    severity: isHighRiskStory(story) ? "high" : "medium",
+    title: "Jira story needs clarification",
+    details: issues.slice(0, 4).join(" "),
+    recommendation: "Clarify the Jira story before merge. Add exact expected behavior, edge cases, and what is out of scope."
   });
 }
 
@@ -1066,6 +1103,51 @@ function countOccurrences(text, term) {
   return count;
 }
 
+function isGenericFallbackCriterion(text) {
+  return /^Implementation satisfies the Jira issue description and expected behavior\.?$/i.test(text);
+}
+
+function isVagueCriterion(text) {
+  const normalized = text.toLowerCase();
+  if (tokenize(text).length < 4) {
+    return true;
+  }
+  return /\b(correct|proper|properly|as expected|should work|works as expected|handle appropriately|support this|update logic|improve|enhance|tbd|to be decided)\b/i.test(normalized);
+}
+
+function findConflictingCriteria(criteria) {
+  const conflicts = [];
+  for (let i = 0; i < criteria.length; i += 1) {
+    for (let j = i + 1; j < criteria.length; j += 1) {
+      const first = String(criteria[i].text ?? "");
+      const second = String(criteria[j].text ?? "");
+      const overlap = tokenize(first).filter((token) => tokenize(second).includes(token));
+      if (overlap.length < 2) {
+        continue;
+      }
+      const firstNegative = /\b(must not|should not|do not|don't|never|without|not applied|not apply)\b/i.test(first);
+      const secondNegative = /\b(must not|should not|do not|don't|never|without|not applied|not apply)\b/i.test(second);
+      if (firstNegative !== secondNegative) {
+        conflicts.push(`${criteria[i].id ?? "AC"} and ${criteria[j].id ?? "AC"} may conflict. Please clarify the expected behavior in Jira.`);
+      }
+    }
+  }
+  return conflicts.slice(0, 3);
+}
+
+function isHighRiskStory(story) {
+  return /payment|pricing|discount|revenue|security|auth|token|pii|guest|card/i.test([
+    story.title,
+    story.description,
+    ...(story.labels ?? []),
+    ...(story.components ?? [])
+  ].join(" "));
+}
+
+function shortenText(text, maxLength) {
+  return text.length <= maxLength ? text : `${text.slice(0, maxLength - 1).trim()}...`;
+}
+
 function shouldIgnoreFile(path) {
   return path === "review-report.md"
     || path === "review-report.json"
@@ -1113,6 +1195,9 @@ function buildReviewerQuestions(story, acceptance, findings) {
   }
   if ((story.outOfScope ?? []).length > 0 && findings.some((finding) => finding.id === "TRACE003" || finding.id === "TRACE002")) {
     questions.push("Has product approved the apparent scope expansion?");
+  }
+  if (findings.some((finding) => finding.id === "JIRA001")) {
+    questions.push("Can the product owner clarify the Jira story before this PR is merged?");
   }
   if (questions.length === 0) {
     questions.push("Are the changed tests enough to prove the story behavior and prevent regression?");

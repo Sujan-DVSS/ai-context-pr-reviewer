@@ -175,6 +175,21 @@ test("Jira stories do not require tests unless Jira explicitly says so", () => {
   assert.equal(report.findings.some((finding) => finding.id === "TEST001"), false);
 });
 
+test("unclear Jira acceptance criteria ask for clarification", () => {
+  const story = jiraIssueToStory({
+    key: "SCRUM-9",
+    fields: {
+      summary: "Update payment discount",
+      description: "Acceptance Criteria:\n- Correct discounted amount is charged at payment."
+    }
+  }, { baseUrl: "https://jira.example.com" });
+
+  const report = runReview({ story, diffText: sampleDiff });
+
+  assert.ok(report.findings.some((finding) => finding.id === "JIRA001"));
+  assert.ok(report.reviewerQuestions.some((question) => /clarify the Jira story/i.test(question)));
+});
+
 test("shouldFail respects configured threshold", () => {
   const report = runReview({ story: sampleStory, diffText: sampleDiff });
 
